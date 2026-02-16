@@ -45,7 +45,7 @@ async function readAssistantStream(response, { onText, onHighlight, onDone, onEr
   }
 }
 
-export default function FocusChatWindow({ projectId, editorContent, onHighlights, session }) {
+export default function FocusChatWindow({ projectId, pages, activeTab, onHighlights, session }) {
   const [expanded, setExpanded] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -102,7 +102,7 @@ export default function FocusChatWindow({ projectId, editorContent, onHighlights
     setMessages((prev) => [...prev, assistantMsg]);
 
     try {
-      const response = await startAssistantStream(projectId, text, editorContent || '', accessToken);
+      const response = await startAssistantStream(projectId, text, pages || {}, activeTab || 'coral', accessToken);
 
       const collectedHighlights = [];
 
@@ -141,7 +141,7 @@ export default function FocusChatWindow({ projectId, editorContent, onHighlights
     } finally {
       setStreaming(false);
     }
-  }, [input, streaming, session, projectId, editorContent, onHighlights]);
+  }, [input, streaming, session, projectId, pages, activeTab, onHighlights]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {

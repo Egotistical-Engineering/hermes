@@ -4,12 +4,13 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Markdown } from '@tiptap/markdown';
-import { fetchWritingProject, saveProjectContent, saveProjectHighlights } from '@hermes/api';
+import { fetchWritingProject, saveProjectPages, saveProjectHighlights } from '@hermes/api';
 import useAuth from '../../hooks/useAuth';
 import useFocusMode from './useFocusMode';
 import useHighlights from './useHighlights';
 import FocusChatWindow from './FocusChatWindow';
 import HighlightPopover from './HighlightPopover';
+import PageTabs, { EMPTY_PAGES, TAB_KEYS } from './PageTabs';
 import ProjectSwitcher from './ProjectSwitcher';
 import styles from './FocusPage.module.css';
 
@@ -26,13 +27,25 @@ export default function FocusPage() {
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [wordCount, setWordCount] = useState(0);
-  const [editorContent, setEditorContent] = useState('');
+  const [activeTab, setActiveTab] = useState('coral');
+  const [pages, setPages] = useState({ ...EMPTY_PAGES });
   const [initialLoaded, setInitialLoaded] = useState(false);
   const saveTimerRef = useRef(null);
   const supabaseSaveTimerRef = useRef(null);
   const highlightSaveTimerRef = useRef(null);
   const hideTimerRef = useRef(null);
-  const storageKey = `hermes-focus-${projectId}`;
+  const switchingRef = useRef(false);
+  const pagesRef = useRef(pages);
+  const activeTabRef = useRef(activeTab);
+  const storageKey = `hermes-focus-pages-${projectId}`;
+
+  // Keep refs in sync for use in onUpdate callback
+  useEffect(() => {
+    pagesRef.current = pages;
+  }, [pages]);
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   const isLoggedIn = !!session;
 
@@ -76,17 +89,25 @@ export default function FocusPage() {
     content: '',
     immediatelyRender: false,
     onUpdate: ({ editor: ed }) => {
+      if (switchingRef.current) return;
+
       const text = ed.getText();
       setWordCount(getWordCount(text));
 
-      const md = ed.getMarkdown();
-      setEditorContent(md);
+      const md = text.trim().length > 0 ? ed.getMarkdown() : '';
+      const tab = activeTabRef.current;
+
+      setPages((prev) => {
+        const next = { ...prev, [tab]: md };
+        pagesRef.current = next;
+        return next;
+      });
 
       // Debounced localStorage save (500ms)
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
         try {
-          localStorage.setItem(storageKey, md);
+          localStorage.setItem(storageKey, JSON.stringify(pagesRef.current));
         } catch {
           // localStorage full or unavailable
         }
@@ -96,7 +117,7 @@ export default function FocusPage() {
       if (isLoggedIn && projectId) {
         if (supabaseSaveTimerRef.current) clearTimeout(supabaseSaveTimerRef.current);
         supabaseSaveTimerRef.current = setTimeout(() => {
-          saveProjectContent(projectId, md).catch(() => {});
+          saveProjectPages(projectId, pagesRef.current).catch(() => {});
         }, 2000);
       }
     },
@@ -120,21 +141,32 @@ export default function FocusPage() {
     let cancelled = false;
 
     async function loadContent() {
+      let loadedPages = null;
+
       // Try Supabase first if logged in
       if (isLoggedIn && projectId) {
         try {
           const project = await fetchWritingProject(projectId);
           if (cancelled) return;
-          if (project?.content) {
-            editor.commands.setContent(project.content, { contentType: 'markdown' });
+
+          // Use pages if they have content, else migrate from content field
+          const hasPages = project?.pages && Object.values(project.pages).some((v) => v);
+          if (hasPages) {
+            loadedPages = { ...EMPTY_PAGES, ...project.pages };
+          } else if (project?.content) {
+            loadedPages = { ...EMPTY_PAGES, coral: project.content };
+          }
+
+          // Load highlights from project
+          if (project?.highlights && project.highlights.length > 0) {
+            replaceHighlights(project.highlights);
+          }
+
+          if (loadedPages) {
+            setPages(loadedPages);
+            pagesRef.current = loadedPages;
+            editor.commands.setContent(loadedPages[activeTab] || '', { contentType: 'markdown' });
             setWordCount(getWordCount(editor.getText()));
-            setEditorContent(project.content);
-
-            // Load highlights from project
-            if (project.highlights && project.highlights.length > 0) {
-              replaceHighlights(project.highlights);
-            }
-
             setInitialLoaded(true);
             return;
           }
@@ -149,12 +181,28 @@ export default function FocusPage() {
       try {
         const saved = localStorage.getItem(storageKey);
         if (saved) {
-          editor.commands.setContent(saved, { contentType: 'markdown' });
-          setWordCount(getWordCount(editor.getText()));
-          setEditorContent(saved);
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object') {
+            loadedPages = { ...EMPTY_PAGES, ...parsed };
+          }
         }
       } catch {
-        // localStorage unavailable
+        // Try legacy single-content key
+        try {
+          const legacy = localStorage.getItem(`hermes-focus-${projectId}`);
+          if (legacy) {
+            loadedPages = { ...EMPTY_PAGES, coral: legacy };
+          }
+        } catch {
+          // localStorage unavailable
+        }
+      }
+
+      if (loadedPages) {
+        setPages(loadedPages);
+        pagesRef.current = loadedPages;
+        editor.commands.setContent(loadedPages[activeTab] || '', { contentType: 'markdown' });
+        setWordCount(getWordCount(editor.getText()));
       }
 
       setInitialLoaded(true);
@@ -163,15 +211,17 @@ export default function FocusPage() {
     loadContent();
 
     return () => { cancelled = true; };
-  }, [editor, projectId, isLoggedIn, storageKey, initialLoaded, replaceHighlights]);
+  }, [editor, projectId, isLoggedIn, storageKey, initialLoaded, activeTab, replaceHighlights]);
 
   // Reset when projectId changes
   useEffect(() => {
     setInitialLoaded(false);
+    setActiveTab('coral');
+    setPages({ ...EMPTY_PAGES });
+    pagesRef.current = { ...EMPTY_PAGES };
     if (editor) {
       editor.commands.clearContent();
       setWordCount(0);
-      setEditorContent('');
     }
     replaceHighlights([]);
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -210,6 +260,42 @@ export default function FocusPage() {
     window.__hermesChatFocus?.(prefill);
     clearHighlight();
   }, [clearHighlight]);
+
+  // Tab switching
+  const handleTabChange = useCallback((newTab) => {
+    if (!editor || newTab === activeTab) return;
+
+    // Flush pending saves immediately
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(pagesRef.current));
+      } catch { /* */ }
+    }
+    if (supabaseSaveTimerRef.current) {
+      clearTimeout(supabaseSaveTimerRef.current);
+      if (isLoggedIn && projectId) {
+        saveProjectPages(projectId, pagesRef.current).catch(() => {});
+      }
+    }
+
+    // Save current content into pages (empty editor → empty string)
+    const hasText = editor.getText().trim().length > 0;
+    const currentMd = hasText ? editor.getMarkdown() : '';
+    const updated = { ...pagesRef.current, [activeTab]: currentMd };
+    setPages(updated);
+    pagesRef.current = updated;
+
+    // Switch tab
+    switchingRef.current = true;
+    setActiveTab(newTab);
+    activeTabRef.current = newTab;
+    editor.commands.setContent(updated[newTab] || '', { contentType: 'markdown' });
+    switchingRef.current = false;
+
+    setWordCount(getWordCount(editor.getText()));
+    replaceHighlights([]);
+  }, [editor, activeTab, storageKey, isLoggedIn, projectId, replaceHighlights]);
 
   // Settings bar hover handling
   const showSettings = useCallback(() => {
@@ -308,6 +394,11 @@ export default function FocusPage() {
         </div>
       </div>
 
+      {/* Page tabs */}
+      <div className={styles.tabsArea}>
+        <PageTabs activeTab={activeTab} onTabChange={handleTabChange} pages={pages} />
+      </div>
+
       {/* Editor */}
       <div className={styles.content}>
         <div className={styles.editorWrap}>
@@ -330,7 +421,8 @@ export default function FocusPage() {
       {/* Floating chat window */}
       <FocusChatWindow
         projectId={projectId}
-        editorContent={editorContent}
+        pages={pages}
+        activeTab={activeTab}
         onHighlights={handleHighlights}
         session={session}
       />

@@ -1,0 +1,32 @@
+.tabs {
+  display: flex;
+  gap: 6px;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.tab {
+  flex: 1;
+  height: 2px;
+  border: none;
+  border-radius: 2px;
+  padding: 8px 0;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+  background-clip: content-box;
+}
+
+.tabEmpty {
+  opacity: 0.3;
+}
+
+.tabActive {
+  height: 3px;
+}
+
+@media (max-width: 640px) {
+  .tabs {
+    padding: 0 16px;
+  }
+}

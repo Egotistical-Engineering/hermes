@@ -85,6 +85,16 @@
   text-align: right;
 }
 
+/* Page tabs area — sits between header and editor */
+.tabsArea {
+  position: fixed;
+  top: 48px;
+  left: 0;
+  right: 0;
+  z-index: 99;
+  padding: 8px 0;
+}
+
 /* Editor styles */
 .editorWrap :global(.tiptap) {
   outline: none;
@@ -294,7 +304,7 @@
 /* Responsive */
 @media (max-width: 640px) {
   .content {
-    padding: 60px 16px 160px;
+    padding: 90px 16px 160px;
   }
 
   .editorWrap :global(.tiptap) {

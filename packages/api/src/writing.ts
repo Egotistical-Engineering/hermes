@@ -15,6 +15,7 @@ export interface WritingProjectRow {
   title: string;
   status: WritingStatus;
   content: string;
+  pages: Record<string, string>;
   highlights: Highlight[];
   created_at: string;
   updated_at: string;
@@ -26,6 +27,7 @@ export interface WritingProject {
   title: string;
   status: WritingStatus;
   content: string;
+  pages: Record<string, string>;
   highlights: Highlight[];
   createdAt: string;
   updatedAt: string;
@@ -66,6 +68,7 @@ export function toWritingProject(row: WritingProjectRow): WritingProject {
     title: row.title,
     status: row.status,
     content: row.content || '',
+    pages: (row.pages as Record<string, string>) || {},
     highlights: (row.highlights as Highlight[]) || [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -164,6 +167,15 @@ export async function seedEssayProject(userId: string): Promise<WritingProject> 
 
 // --- Assistant API ---
 
+export async function saveProjectPages(projectId: string, pages: Record<string, string>): Promise<void> {
+  const { error } = await getSupabase()
+    .from('projects')
+    .update({ pages })
+    .eq('id', projectId);
+
+  if (error) throw error;
+}
+
 export async function saveProjectContent(projectId: string, content: string): Promise<void> {
   const { error } = await getSupabase()
     .from('projects')
@@ -215,14 +227,15 @@ export async function saveAssistantConversation(projectId: string, messages: Ass
 export async function startAssistantStream(
   projectId: string,
   message: string,
-  editorContent: string,
+  pages: Record<string, string>,
+  activeTab: string,
   accessToken: string,
 ): Promise<Response> {
   const baseUrl = normalizeBaseUrl(getPlatform().serverBaseUrl);
   const res = await fetch(`${baseUrl}/api/assistant/chat`, {
     method: 'POST',
     headers: authHeaders(accessToken),
-    body: JSON.stringify({ projectId, message, editorContent }),
+    body: JSON.stringify({ projectId, message, pages, activeTab }),
   });
 
   if (!res.ok) {

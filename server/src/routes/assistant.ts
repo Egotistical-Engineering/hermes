@@ -28,7 +28,8 @@ type HighlightData = {
 const ChatSchema = z.object({
   projectId: z.string().uuid(),
   message: z.string().trim().min(1).max(6000),
-  editorContent: z.string().max(100000).default(''),
+  pages: z.record(z.string(), z.string()).default({}),
+  activeTab: z.string().default('coral'),
 });
 
 const HIGHLIGHT_TOOL: Anthropic.Messages.Tool = {
@@ -92,8 +93,9 @@ Highlight rules:
 
 Be direct, intellectually rigorous, but warm. You're a thinking partner, not an editor.`;
 
-function getMaxTokens(editorContent: string): number {
-  const wordCount = editorContent.trim().split(/\s+/).filter(Boolean).length;
+function getMaxTokens(pages: Record<string, string>): number {
+  const allContent = Object.values(pages).join(' ');
+  const wordCount = allContent.trim().split(/\s+/).filter(Boolean).length;
   if (wordCount > 3000) return 3072;
   return 2048;
 }
@@ -138,7 +140,8 @@ router.post('/chat', requireAuth, async (req: Request, res: Response) => {
     return;
   }
 
-  const { projectId, message, editorContent } = parsed.data;
+  const { projectId, message, activeTab } = parsed.data;
+  const pages = parsed.data.pages as Record<string, string>;
   const userId = req.user!.id;
 
   const project = await getOwnedProject(projectId, userId);
@@ -167,8 +170,18 @@ router.post('/chat', requireAuth, async (req: Request, res: Response) => {
 
   // Build system context
   let systemContent = SYSTEM_PROMPT;
-  if (editorContent.trim()) {
-    systemContent += `\n\n---\n\n## Current Document\n\n${editorContent}`;
+
+  // Build document context from pages (active tab first, then non-empty others)
+  const tabNames: Record<string, string> = {
+    coral: 'Coral', amber: 'Amber', sage: 'Sage', sky: 'Sky', lavender: 'Lavender',
+  };
+  const activeContent = (pages[activeTab] || '').trim();
+  if (activeContent) {
+    systemContent += `\n\n---\n\n## Current Document (${tabNames[activeTab] || activeTab})\n\n${activeContent}`;
+  }
+  for (const [key, content] of Object.entries(pages)) {
+    if (key === activeTab || !content.trim()) continue;
+    systemContent += `\n\n## ${tabNames[key] || key} Tab\n\n${content}`;
   }
   if (priorEssays.length) {
     systemContent += '\n\n## Prior Writing Samples\n';
@@ -222,7 +235,7 @@ router.post('/chat', requireAuth, async (req: Request, res: Response) => {
     while (continueLoop) {
       const response = await anthro.messages.create({
         model: MODEL,
-        max_tokens: getMaxTokens(editorContent),
+        max_tokens: getMaxTokens(pages),
         temperature: 0.7,
         system: systemContent,
         tools: [HIGHLIGHT_TOOL],
