@@ -1,0 +1,68 @@
+.markdown {
+  color: inherit;
+}
+
+.markdown :global(a) {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.markdown :global(code) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.92em;
+  background: var(--bg-elevated);
+  border-radius: 2px;
+  padding: 0.05em 0.25em;
+}
+
+.markdown :global(pre) {
+  margin: 0.6em 0;
+  padding: 0.7em;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  overflow-x: auto;
+}
+
+.markdown :global(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.block :global(p),
+.block :global(ul),
+.block :global(ol),
+.block :global(blockquote),
+.block :global(h1),
+.block :global(h2),
+.block :global(h3),
+.block :global(h4),
+.block :global(h5),
+.block :global(h6) {
+  margin: 0;
+}
+
+.block :global(p + p),
+.block :global(p + ul),
+.block :global(p + ol),
+.block :global(ul + p),
+.block :global(ol + p),
+.block :global(blockquote + p),
+.block :global(p + blockquote) {
+  margin-top: 0.6em;
+}
+
+.block :global(ul),
+.block :global(ol) {
+  padding-left: 1.2em;
+}
+
+.block :global(blockquote) {
+  border-left: 2px solid var(--border-subtle);
+  padding-left: 0.75em;
+  color: var(--text-muted);
+}
+
+.inline {
+  display: inline;
+}

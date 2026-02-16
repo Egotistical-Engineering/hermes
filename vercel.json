@@ -1,0 +1,8 @@
+{
+  "installCommand": "npm ci --include=optional",
+  "buildCommand": "ROLLUP_VERSION=$(node -p \"require('./node_modules/rollup/package.json').version\") && npm i --no-save @rollup/rollup-linux-x64-gnu@$ROLLUP_VERSION && npm run web:build",
+  "outputDirectory": "apps/web/dist",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/" }
+  ]
+}

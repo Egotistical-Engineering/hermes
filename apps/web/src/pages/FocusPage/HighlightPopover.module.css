@@ -1,0 +1,139 @@
+.popover {
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 300;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 12px 14px;
+  max-width: 320px;
+  min-width: 200px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-bottom: 8px;
+}
+
+.badge_question {
+  background: rgba(66, 133, 244, 0.15);
+  color: rgb(66, 133, 244);
+}
+
+.badge_suggestion {
+  background: rgba(251, 188, 4, 0.2);
+  color: rgb(180, 130, 0);
+}
+
+.badge_edit {
+  background: rgba(52, 168, 83, 0.15);
+  color: rgb(52, 168, 83);
+}
+
+.badge_voice {
+  background: rgba(156, 39, 176, 0.15);
+  color: rgb(156, 39, 176);
+}
+
+.badge_weakness {
+  background: rgba(244, 67, 54, 0.12);
+  color: rgb(200, 50, 40);
+}
+
+.badge_evidence {
+  background: rgba(0, 150, 136, 0.15);
+  color: rgb(0, 130, 118);
+}
+
+.badge_wordiness {
+  background: rgba(255, 152, 0, 0.2);
+  color: rgb(180, 100, 0);
+}
+
+.badge_factcheck {
+  background: rgba(233, 30, 99, 0.15);
+  color: rgb(200, 25, 85);
+}
+
+.comment {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+.editPreview {
+  background: rgba(52, 168, 83, 0.06);
+  border: 1px solid rgba(52, 168, 83, 0.15);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+
+.editLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #999;
+  margin-bottom: 4px;
+}
+
+.editText {
+  font-size: 13px;
+  line-height: 1.4;
+  color: #333;
+  font-style: italic;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.acceptBtn,
+.replyBtn,
+.dismissBtn {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: none;
+  transition: background 150ms ease;
+}
+
+.acceptBtn {
+  background: rgba(52, 168, 83, 0.1);
+  color: rgb(52, 168, 83);
+  border-color: rgba(52, 168, 83, 0.2);
+}
+
+.acceptBtn:hover {
+  background: rgba(52, 168, 83, 0.2);
+}
+
+.replyBtn {
+  color: #555;
+}
+
+.replyBtn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.dismissBtn {
+  color: #999;
+}
+
+.dismissBtn:hover {
+  color: #666;
+  background: rgba(0, 0, 0, 0.04);
+}

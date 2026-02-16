@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "baseUrl": ".",
+    "paths": {
+      "@hermes/api": ["packages/api/src/index.ts"],
+      "@hermes/api/*": ["packages/api/src/*"],
+      "@hermes/domain": ["packages/domain/src/index.ts"],
+      "@hermes/domain/*": ["packages/domain/src/*"]
+    }
+  }
+}

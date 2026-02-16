@@ -1,0 +1,31 @@
+/* Shared dropdown primitives — compose into component CSS modules */
+
+.menu {
+  position: absolute;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  z-index: 200;
+}
+
+.item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover {
+  background-color: var(--bg-hover);
+}
+
+.itemDanger {
+  color: var(--error);
+}
+
+.itemDanger:hover {
+  background-color: var(--error-bg);
+}

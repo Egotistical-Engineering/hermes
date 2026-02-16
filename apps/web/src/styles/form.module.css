@@ -1,0 +1,134 @@
+/* Shared form primitives — compose into component CSS modules */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+}
+
+.input {
+  padding: 8px 10px;
+  font-size: var(--font-base);
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--text-muted);
+}
+
+.textarea {
+  padding: 8px 10px;
+  font-size: var(--font-base);
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  color: var(--text-primary);
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.textarea:focus {
+  border-color: var(--text-muted);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.cancelBtn,
+.submitBtn {
+  padding: 8px 16px;
+  font-size: var(--font-sm);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.cancelBtn {
+  background-color: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.cancelBtn:hover {
+  color: var(--text-primary);
+}
+
+.submitBtn {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+}
+
+.submitBtn:hover:not(:disabled) {
+  background-color: var(--bg-hover);
+}
+
+.submitBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.requiredMark::after {
+  content: ' *';
+  color: var(--error);
+}
+
+.handleWrapper {
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+}
+
+.handleWrapper:focus-within {
+  border-color: var(--text-muted);
+}
+
+.handlePrefix {
+  padding: 8px 0 8px 10px;
+  font-size: var(--font-base);
+  color: var(--text-dim);
+  user-select: none;
+}
+
+.handleInput {
+  flex: 1;
+  padding: 8px 10px 8px 2px;
+  font-size: var(--font-base);
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.handleHint {
+  font-size: var(--font-xs);
+  color: var(--text-dim);
+}
+
+.handleHint[data-status="available"] {
+  color: var(--accent);
+}
+
+.handleHint[data-status="unavailable"],
+.handleHint[data-status="invalid"] {
+  color: var(--error);
+}
+

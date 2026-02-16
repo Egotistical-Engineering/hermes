@@ -1,0 +1,371 @@
+.page {
+  position: fixed;
+  inset: 0;
+  background: #f5f5f0;
+  overflow-y: auto;
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  color: #1a1a1a;
+}
+
+.content {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 120px 24px 200px;
+}
+
+/* Settings hover zone — wraps both trigger area and bar */
+.hoverZone {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  z-index: 100;
+}
+
+.settingsBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: rgba(245, 245, 240, 0.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 200ms ease, transform 200ms ease;
+  pointer-events: none;
+}
+
+.settingsBarVisible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.brandLabel {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.settingsRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.focusBtn {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  color: #999;
+  background: none;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.focusBtn:hover {
+  color: #1a1a1a;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.focusBtnActive {
+  color: #1a1a1a;
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+.wordCount {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  color: #bbb;
+  text-align: right;
+}
+
+/* Editor styles */
+.editorWrap :global(.tiptap) {
+  outline: none;
+  min-height: 60vh;
+  font-size: 18px;
+  line-height: 1.75;
+  caret-color: #1a1a1a;
+}
+
+.editorWrap :global(.tiptap) :global(.is-editor-empty):first-child::before {
+  content: attr(data-placeholder);
+  color: #c0bdb5;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Typography */
+.editorWrap :global(.tiptap) p {
+  margin: 0 0 1em;
+  transition: opacity 250ms ease;
+}
+
+.editorWrap :global(.tiptap) h1 {
+  font-size: 1.6em;
+  font-weight: 700;
+  margin: 1.4em 0 0.6em;
+  line-height: 1.3;
+  transition: opacity 250ms ease;
+}
+
+.editorWrap :global(.tiptap) h2 {
+  font-size: 1.3em;
+  font-weight: 700;
+  margin: 1.2em 0 0.5em;
+  line-height: 1.35;
+  transition: opacity 250ms ease;
+}
+
+.editorWrap :global(.tiptap) h3 {
+  font-size: 1.1em;
+  font-weight: 700;
+  margin: 1em 0 0.4em;
+  line-height: 1.4;
+  transition: opacity 250ms ease;
+}
+
+.editorWrap :global(.tiptap) blockquote {
+  border-left: 2px solid #d0cdc5;
+  margin: 1em 0;
+  padding-left: 1em;
+  color: #666;
+  transition: opacity 250ms ease;
+}
+
+.editorWrap :global(.tiptap) code {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.editorWrap :global(.tiptap) pre {
+  background: #eae8e2;
+  padding: 16px;
+  border-radius: 4px;
+  margin: 1em 0;
+  overflow-x: auto;
+  transition: opacity 250ms ease;
+}
+
+.editorWrap :global(.tiptap) pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: 14px;
+}
+
+.editorWrap :global(.tiptap) hr {
+  border: none;
+  border-top: 1px solid #d0cdc5;
+  margin: 2em 0;
+  transition: opacity 250ms ease;
+}
+
+.editorWrap :global(.tiptap) ul,
+.editorWrap :global(.tiptap) ol {
+  margin: 0.5em 0 1em;
+  padding-left: 1.5em;
+  transition: opacity 250ms ease;
+}
+
+.editorWrap :global(.tiptap) li {
+  margin-bottom: 0.3em;
+}
+
+.editorWrap :global(.tiptap) strong {
+  font-weight: 700;
+}
+
+/* Focus mode — ProseMirror decorations dim non-active blocks/sentences */
+:global(.focus-dimmed-block) {
+  opacity: 0.2;
+  transition: opacity 200ms ease;
+}
+
+/* Highlight decorations — inline highlights from the AI assistant */
+:global(.highlight-question) {
+  background: rgba(66, 133, 244, 0.15);
+  border-bottom: 2px solid rgba(66, 133, 244, 0.4);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 150ms ease;
+}
+:global(.highlight-question):hover {
+  background: rgba(66, 133, 244, 0.25);
+}
+
+:global(.highlight-suggestion) {
+  background: rgba(251, 188, 4, 0.15);
+  border-bottom: 2px solid rgba(251, 188, 4, 0.4);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 150ms ease;
+}
+:global(.highlight-suggestion):hover {
+  background: rgba(251, 188, 4, 0.25);
+}
+
+:global(.highlight-edit) {
+  background: rgba(52, 168, 83, 0.15);
+  border-bottom: 2px solid rgba(52, 168, 83, 0.4);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 150ms ease;
+}
+:global(.highlight-edit):hover {
+  background: rgba(52, 168, 83, 0.25);
+}
+
+:global(.highlight-voice) {
+  background: rgba(156, 39, 176, 0.15);
+  border-bottom: 2px solid rgba(156, 39, 176, 0.4);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 150ms ease;
+}
+:global(.highlight-voice):hover {
+  background: rgba(156, 39, 176, 0.25);
+}
+
+:global(.highlight-weakness) {
+  background: rgba(244, 67, 54, 0.12);
+  border-bottom: 2px solid rgba(244, 67, 54, 0.35);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 150ms ease;
+}
+:global(.highlight-weakness):hover {
+  background: rgba(244, 67, 54, 0.2);
+}
+
+:global(.highlight-evidence) {
+  background: rgba(0, 150, 136, 0.15);
+  border-bottom: 2px solid rgba(0, 150, 136, 0.4);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 150ms ease;
+}
+:global(.highlight-evidence):hover {
+  background: rgba(0, 150, 136, 0.25);
+}
+
+:global(.highlight-wordiness) {
+  background: rgba(255, 152, 0, 0.15);
+  border-bottom: 2px solid rgba(255, 152, 0, 0.4);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 150ms ease;
+}
+:global(.highlight-wordiness):hover {
+  background: rgba(255, 152, 0, 0.25);
+}
+
+:global(.highlight-factcheck) {
+  background: rgba(233, 30, 99, 0.15);
+  border-bottom: 2px solid rgba(233, 30, 99, 0.4);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 150ms ease;
+}
+:global(.highlight-factcheck):hover {
+  background: rgba(233, 30, 99, 0.25);
+}
+
+/* Focus button inner spans — desktop shows label, mobile shows icon */
+.focusIcon {
+  display: none;
+}
+
+/* Mobile toggle buttons — hidden on desktop */
+.mobileToggleFloat,
+.mobileToggleInline {
+  display: none;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .content {
+    padding: 60px 16px 160px;
+  }
+
+  .editorWrap :global(.tiptap) {
+    font-size: 16px;
+  }
+
+  /* Disable hover behavior on mobile */
+  .hoverZone {
+    height: auto;
+    pointer-events: none;
+  }
+
+  .settingsBar {
+    pointer-events: auto;
+    padding: 10px 12px;
+  }
+
+  /* Focus: icon-only on mobile */
+  .focusLabel {
+    display: none;
+  }
+
+  .focusIcon {
+    display: flex;
+  }
+
+  .focusBtn {
+    padding: 4px 6px;
+    line-height: 0;
+  }
+
+  /* Floating eye toggle — when bar is hidden */
+  .mobileToggleFloat {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(245, 245, 240, 0.85);
+    border: none;
+    color: #bbb;
+    cursor: pointer;
+    z-index: 150;
+    padding: 0;
+  }
+
+  .mobileToggleFloat:active {
+    color: #666;
+  }
+
+  /* Inline eye toggle — inside the bar */
+  .mobileToggleInline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: none;
+    border: none;
+    color: #bbb;
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+  }
+
+  .mobileToggleInline:active {
+    color: #666;
+  }
+}

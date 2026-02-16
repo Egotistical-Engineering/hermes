@@ -1,0 +1,32 @@
+{
+  "name": "hermes",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": [
+    "apps/web",
+    "packages/*",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -n web,server -c cyan,yellow \"npm:web:dev\" \"npm:server:dev\"",
+    "web:dev": "npm run dev -w @hermes/web",
+    "web:build": "npm run build -w @hermes/web",
+    "server:dev": "npm run dev -w server",
+    "server:typecheck": "npm run typecheck -w server",
+    "test:web": "playwright test",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.1",
+    "concurrently": "^9.2.1",
+    "typescript-eslint": "^8.35.1"
+  },
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "dependencies": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  }
+}

@@ -1,0 +1,134 @@
+.main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 55px);
+  padding: 20px;
+}
+
+.form {
+  composes: form from '../../styles/form.module.css';
+  gap: 16px;
+  width: 100%;
+  max-width: 340px;
+}
+
+.title {
+  font-size: var(--font-lg);
+  font-weight: 400;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.error {
+  font-size: var(--font-sm);
+  color: var(--error);
+  margin: 0;
+}
+
+.label {
+  composes: label from '../../styles/form.module.css';
+}
+
+.input {
+  composes: input from '../../styles/form.module.css';
+}
+
+.forgotLink {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-align: right;
+  margin-top: -8px;
+}
+
+.forgotLink:hover {
+  color: var(--text-primary);
+}
+
+.submit {
+  composes: submitBtn from '../../styles/form.module.css';
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-dim);
+  font-size: var(--font-sm);
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.googleBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  font-size: var(--font-sm);
+  font-family: inherit;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.googleBtn:hover {
+  border-color: var(--text-muted);
+}
+
+.resendRow {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  margin: -8px 0 0;
+}
+
+.resendBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.resendBtn:hover {
+  color: var(--text-primary);
+}
+
+.resendBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.resendSuccess {
+  color: var(--accent);
+}
+
+.switchLink {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  text-align: center;
+  margin: 0;
+}
+
+.switchLink a {
+  color: var(--text-muted);
+  text-decoration: underline;
+}
+
+.switchLink a:hover {
+  color: var(--text-primary);
+}
