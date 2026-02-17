@@ -27,6 +27,8 @@ export default function ShareButton({
   const [authorName, setAuthorName] = useState(initialAuthorName || '');
   const [selectedTabs, setSelectedTabs] = useState(initialPublishedTabs || []);
   const [publishing, setPublishing] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [updated, setUpdated] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const wrapRef = useRef(null);
@@ -112,6 +114,27 @@ export default function ShareButton({
     }
     setPublishing(false);
   }, [projectId, authorName, selectedTabs, publishing, onPublishChange]);
+
+  const handleUpdate = useCallback(async () => {
+    if (!projectId || updating) return;
+    setUpdating(true);
+    try {
+      const result = await publishProject(projectId, authorName, selectedTabs);
+      onPublishChange?.({
+        published: true,
+        shortId: result.shortId,
+        slug: result.slug,
+        authorName: result.authorName,
+        publishedTabs: result.publishedTabs,
+        publishedAt: result.publishedAt,
+      });
+      setUpdated(true);
+      setTimeout(() => setUpdated(false), 2000);
+    } catch (err) {
+      console.error('Update failed:', err);
+    }
+    setUpdating(false);
+  }, [projectId, authorName, selectedTabs, updating, onPublishChange]);
 
   const handleUnpublish = useCallback(async () => {
     if (!projectId) return;
@@ -217,6 +240,17 @@ export default function ShareButton({
                   ))}
                 </div>
               </div>
+
+              <button
+                className={styles.updateBtn}
+                onClick={handleUpdate}
+                disabled={updating}
+              >
+                {updating ? 'Updating...' : updated ? 'Updated' : 'Update published content'}
+              </button>
+              {updated && (
+                <p className={styles.updateNote}>Readers will see your latest changes.</p>
+              )}
 
               <button
                 className={styles.unpublishBtn}

@@ -61,6 +61,7 @@ export interface WritingProjectRow {
   slug: string | null;
   author_name: string;
   published_tabs: string[];
+  published_pages: Record<string, string>;
   published_at: string | null;
   created_at: string;
   updated_at: string;
@@ -79,6 +80,7 @@ export interface WritingProject {
   slug: string | null;
   authorName: string;
   publishedTabs: string[];
+  publishedPages: Record<string, string>;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -136,6 +138,7 @@ export function toWritingProject(row: WritingProjectRow): WritingProject {
     slug: row.slug ?? null,
     authorName: row.author_name ?? '',
     publishedTabs: row.published_tabs ?? [],
+    publishedPages: (row.published_pages as Record<string, string>) || {},
     publishedAt: row.published_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -387,9 +390,19 @@ export async function publishProject(
   publishedTabs: string[],
 ): Promise<WritingProject> {
   // Fetch current project to check if already published (reuse shortId)
+  // and to snapshot current pages content
   const existing = await fetchWritingProject(projectId);
   const shortId = existing?.shortId || generateShortId();
   const slug = generateSlug(existing?.title || 'untitled');
+
+  // Snapshot only the selected tabs' content into published_pages
+  const currentPages = existing?.pages || {};
+  const publishedPages: Record<string, string> = {};
+  for (const tab of publishedTabs) {
+    if (currentPages[tab]) {
+      publishedPages[tab] = currentPages[tab];
+    }
+  }
 
   const { data, error } = await getSupabase()
     .from('projects')
@@ -399,7 +412,8 @@ export async function publishProject(
       slug,
       author_name: authorName,
       published_tabs: publishedTabs,
-      published_at: existing?.publishedAt || new Date().toISOString(),
+      published_pages: publishedPages,
+      published_at: new Date().toISOString(),
     })
     .eq('id', projectId)
     .select('*')
@@ -426,7 +440,7 @@ export async function unpublishProject(projectId: string): Promise<WritingProjec
 export async function fetchPublishedEssay(shortId: string): Promise<PublishedEssay | null> {
   const { data, error } = await getSupabase()
     .from('projects')
-    .select('title, author_name, pages, published_tabs, published_at, short_id, slug')
+    .select('title, author_name, published_pages, published_tabs, published_at, short_id, slug')
     .eq('short_id', shortId)
     .eq('published', true)
     .single();
@@ -436,12 +450,12 @@ export async function fetchPublishedEssay(shortId: string): Promise<PublishedEss
     throw error;
   }
 
-  // Strip unpublished tab content
+  // Read from the frozen snapshot (published_pages)
   const publishedTabSet = new Set(data.published_tabs || []);
   const filteredPages: Record<string, string> = {};
   for (const tab of publishedTabSet) {
-    if ((data.pages as Record<string, string>)?.[tab]) {
-      filteredPages[tab] = (data.pages as Record<string, string>)[tab];
+    if ((data.published_pages as Record<string, string>)?.[tab]) {
+      filteredPages[tab] = (data.published_pages as Record<string, string>)[tab];
     }
   }
 

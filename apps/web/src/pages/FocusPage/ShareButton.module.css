@@ -192,6 +192,38 @@
   color: #666;
 }
 
+.updateBtn {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #fff;
+  background: #1a1a1a;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: background 150ms ease;
+}
+
+.updateBtn:hover {
+  background: #333;
+}
+
+.updateBtn:disabled {
+  background: #ccc;
+  cursor: default;
+}
+
+.updateNote {
+  font-size: 11px;
+  color: #6b9e7a;
+  margin-top: 6px;
+  text-align: center;
+}
+
 .unpublishBtn {
   display: block;
   width: 100%;
