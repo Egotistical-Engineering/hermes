@@ -248,14 +248,17 @@ export async function seedEssayProject(userId: string): Promise<WritingProject> 
   return toWritingProject(project);
 }
 
-export async function seedWelcomeProject(userId: string): Promise<WritingProject> {
+export async function seedWelcomeProject(
+  userId: string,
+  customPages?: Record<string, string>,
+): Promise<WritingProject> {
   const { data, error } = await getSupabase()
     .from('projects')
     .insert({
       title: WELCOME_TITLE,
       user_id: userId,
       status: 'complete',
-      pages: WELCOME_PAGES,
+      pages: customPages || WELCOME_PAGES,
     })
     .select('*')
     .single<WritingProjectRow>();

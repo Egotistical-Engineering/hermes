@@ -37,7 +37,7 @@ function RedirectToLatestProject() {
 
     (async () => {
       try {
-        const { fetchWritingProjects, createWritingProject, seedEssayProject, seedWelcomeProject } = await import('@hermes/api');
+        const { fetchWritingProjects, createWritingProject, seedEssayProject, seedWelcomeProject, WELCOME_PAGES } = await import('@hermes/api');
         const projects = await fetchWritingProjects();
         if (cancelled) return;
 
@@ -45,10 +45,30 @@ function RedirectToLatestProject() {
           navigate(`/projects/${projects[0].id}`, { replace: true });
         } else {
           // First login — seed Welcome + Essay projects
+          // Check if the user wrote custom content before signing up
+          let customPages;
+          try {
+            const raw = localStorage.getItem('hermes-welcome-pages');
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const hasCustomContent = Object.keys(parsed).some(
+                  (key) => parsed[key] !== (WELCOME_PAGES[key] ?? ''),
+                );
+                if (hasCustomContent) customPages = parsed;
+              }
+            }
+          } catch { /* malformed localStorage — fall through to default seed */ }
+
           let welcomeProject;
-          try { welcomeProject = await seedWelcomeProject(session.user.id); } catch { /* continue */ }
+          try { welcomeProject = await seedWelcomeProject(session.user.id, customPages); } catch { /* continue */ }
           try { await seedEssayProject(session.user.id); } catch { /* continue */ }
           if (cancelled) return;
+
+          // Clean up localStorage after successful migration
+          if (welcomeProject && customPages) {
+            try { localStorage.removeItem('hermes-welcome-pages'); } catch { /* ignore */ }
+          }
 
           if (welcomeProject) {
             navigate(`/projects/${welcomeProject.id}`, { replace: true });
