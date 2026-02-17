@@ -4,6 +4,8 @@ export const config = {
   runtime: 'edge',
 };
 
+const ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 18 18" fill="none"><path d="M9 17L9 4" stroke="%23bbb" stroke-width="1.5" stroke-linecap="round"/><path d="M9 4C7.5 4 4 3.5 2 1C3.5 4 4.5 7 5 9C6 7 7.5 5.5 9 4Z" fill="%23bbb"/><path d="M9 4C10.5 4 14 3.5 16 1C14.5 4 13.5 7 13 9C12 7 10.5 5.5 9 4Z" fill="%23bbb"/></svg>`;
+
 export default async function handler(request) {
   const { searchParams } = new URL(request.url);
   const title = searchParams.get('title') || 'Untitled';
@@ -111,10 +113,9 @@ export default async function handler(request) {
                 {
                   type: 'img',
                   props: {
-                    src: 'data:image/svg+xml;base64,' + btoa('<svg width="32" height="32" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M9 17L9 4" stroke="#bbb" stroke-width="1.5" stroke-linecap="round"/><path d="M9 4C7.5 4 4 3.5 2 1C3.5 4 4.5 7 5 9C6 7 7.5 5.5 9 4Z" fill="#bbb"/><path d="M9 4C10.5 4 14 3.5 16 1C14.5 4 13.5 7 13 9C12 7 10.5 5.5 9 4Z" fill="#bbb"/></svg>'),
-                    width: '20',
-                    height: '20',
-                    style: { width: '20px', height: '20px' },
+                    src: `data:image/svg+xml,${ICON_SVG}`,
+                    width: 24,
+                    height: 24,
                   },
                 },
                 'dearhermes.com',
