@@ -73,3 +73,43 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: [typecheck, build, test, server-deploy-check, lint]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Build with Vercel
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Deploy to Vercel
+        id: deploy
+        run: echo "url=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})" >> "$GITHUB_OUTPUT"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Alias to staging.dearhermes.com
+        run: vercel alias set ${{ steps.deploy.outputs.url }} staging.dearhermes.com --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      - name: Deploy server to Railway staging
+        # Deploy from repo root so Railway can resolve service rootDirectory (/server),
+        # and avoid --detach so CI fails if Railway build/deploy fails.
+        run: railway deployment up --ci --environment 5041c636-81cf-4af9-8e48-b814666ca8c0 --service 45d0ac5c-2aa1-4b6a-98ec-87be1888d7f2 --project 489c4736-d828-4a18-a329-d1427a0d78c6 --message "$DEPLOY_MESSAGE"
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          DEPLOY_MESSAGE: "PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"

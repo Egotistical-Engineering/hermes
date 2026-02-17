@@ -30,8 +30,8 @@ Sentry.ErrorBoundary → BrowserRouter → AuthProvider → App
 ```
 /                       → RedirectToLatestProject (redirects to /projects/:id)
 /projects/:projectId    → FocusPage (auth required)
-/login                  → Redirect to / (login lives in UserMenu dropdown)
-/signup                 → Redirect to / (signup lives in UserMenu dropdown)
+/login                  → LoginPage (standalone login form)
+/signup                 → SignupPage (standalone signup form)
 /forgot-password        → Redirect to / (forgot password lives in UserMenu dropdown)
 /reset-password         → ResetPasswordPage
 /auth/confirm           → AuthConfirmPage
@@ -106,6 +106,40 @@ All tables linked by `project_id`, owner-scoped via RLS:
 - Prior completed projects are passed as context for voice/style consistency
 - Interview uses one-question-at-a-time format to keep conversation focused
 
+## Staging Environment
+
+### Deployed staging
+
+- **Frontend**: `https://staging.dearhermes.com` (Vercel, aliased via CI on every PR)
+- **Backend**: Railway `staging` environment (deploys from PR via CI)
+- **Supabase**: Separate `hermes-staging` project (us-east-1)
+
+### How staging deploys work
+
+1. Open a PR against `main` → CI runs 5 checks in parallel
+2. All checks pass → `deploy-staging` job deploys frontend to Vercel (aliased to `staging.dearhermes.com`) AND server to Railway staging via `railway deployment up`
+3. Test on `staging.dearhermes.com` → merge PR → production auto-deploys from `main`
+
+### Running locally against staging
+
+```bash
+# Frontend (port 5176, staging Supabase)
+npm run web:dev:staging
+
+# Backend (port 3003, staging Supabase) — separate terminal
+npm run server:dev:staging
+```
+
+### How it works
+
+- **Server**: `DOTENV_CONFIG_PATH=server/.env.staging` tells `dotenv/config` to load staging credentials instead of `server/.env`. Zero source code changes.
+- **Frontend**: `vite --mode staging` loads `apps/web/.env.staging` automatically (native Vite behavior).
+
+### Key differences from production
+
+- Frontend and backend MUST target the same Supabase project (auth tokens are project-scoped)
+- Vercel Deployment Protection is disabled for Preview (staging is publicly accessible)
+
 ## Supabase
 
 - **Project ID**: Set in your Supabase dashboard (see `.env`)
@@ -163,7 +197,7 @@ When adding new forms or dropdown menus, always `composes` from these primitives
 
 ### CI
 
-GitHub Actions workflow (`.github/workflows/ci.yml`) runs 5 parallel jobs on push/PR to main: **typecheck**, **build**, **test**, **server-deploy-check**, **lint**. Uses `.node-version` for consistent Node version.
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs 5 parallel jobs on push/PR to main: **typecheck**, **build**, **test**, **server-deploy-check**, **lint**. On PRs, a 6th job **deploy-staging** runs after all checks pass — it deploys frontend to Vercel (aliased to `staging.dearhermes.com`) and server to Railway staging via `railway deployment up`. Uses `.node-version` for consistent Node version.
 
 ### Error tracking (Sentry)
 
@@ -209,3 +243,5 @@ Add the route to `apps/web/src/App.jsx`. Wrap in `RequireAuth` if auth is requir
 ## README Maintenance
 
 When a PR introduces changes that contradict information in `README.md`, update the README as part of the same PR. Keep the README concise — detailed internals belong in CLAUDE.md, not the README.
+
+The README must always reflect the current state of the app. No aspirational features, no references to deleted pages or routes, no planned-but-unbuilt functionality. If a feature doesn't exist yet, it doesn't belong in the README.

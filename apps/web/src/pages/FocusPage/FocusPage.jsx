@@ -28,7 +28,7 @@ export default function FocusPage() {
   const { session } = useAuth();
   const [projectTitle, setProjectTitle] = useState('');
   const [settingsVisible, setSettingsVisible] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [_dropdownOpen, setDropdownOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const shortcutsRef = useRef(null);
   const [wordCount, setWordCount] = useState(0);
@@ -38,7 +38,6 @@ export default function FocusPage() {
   const saveTimerRef = useRef(null);
   const supabaseSaveTimerRef = useRef(null);
   const highlightSaveTimerRef = useRef(null);
-  const hideTimerRef = useRef(null);
   const switchingRef = useRef(false);
   const pagesRef = useRef(pages);
   const activeTabRef = useRef(activeTab);
@@ -315,20 +314,6 @@ export default function FocusPage() {
     replaceHighlights([]);
   }, [editor, activeTab, storageKey, isLoggedIn, projectId, replaceHighlights]);
 
-  // Settings bar hover handling
-  const showSettings = useCallback(() => {
-    if (hideTimerRef.current) {
-      clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = null;
-    }
-    setSettingsVisible(true);
-  }, []);
-
-  const hideSettings = useCallback(() => {
-    if (dropdownOpen) return;
-    hideTimerRef.current = setTimeout(() => setSettingsVisible(false), 300);
-  }, [dropdownOpen]);
-
   const handleCopy = useCallback(() => {
     if (!editor) return;
     return editor.getMarkdown();
@@ -365,10 +350,10 @@ export default function FocusPage() {
 
   return (
     <div className={styles.page}>
-      {/* Mobile floating toggle — only visible when bar is hidden */}
+      {/* Floating toggle — only visible when bar is hidden */}
       {!settingsVisible && (
         <button
-          className={styles.mobileToggleFloat}
+          className={styles.toggleFloat}
           onClick={() => setSettingsVisible(true)}
           aria-label="Show settings"
         >
@@ -376,12 +361,8 @@ export default function FocusPage() {
         </button>
       )}
 
-      {/* Hover zone + settings bar */}
-      <div
-        className={styles.hoverZone}
-        onMouseEnter={showSettings}
-        onMouseLeave={hideSettings}
-      >
+      {/* Settings bar */}
+      <div className={styles.hoverZone}>
         <div
           className={`${styles.settingsBar} ${settingsVisible ? styles.settingsBarVisible : ''}`}
         >
@@ -455,9 +436,9 @@ export default function FocusPage() {
               onDropdownOpen={() => setDropdownOpen(true)}
               onDropdownClose={() => setDropdownOpen(false)}
             />
-            {/* Mobile inline toggle — inside the bar */}
+            {/* Inline toggle — inside the bar */}
             <button
-              className={styles.mobileToggleInline}
+              className={styles.toggleInline}
               onClick={() => setSettingsVisible(false)}
               aria-label="Hide settings"
             >

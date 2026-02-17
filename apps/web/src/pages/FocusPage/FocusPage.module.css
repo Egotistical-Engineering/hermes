@@ -18,14 +18,15 @@
   padding: 32px 24px 200px;
 }
 
-/* Settings hover zone — wraps both trigger area and bar */
+/* Settings hover zone — wraps toggle and bar */
 .hoverZone {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 60px;
+  height: auto;
   z-index: 100;
+  pointer-events: none;
 }
 
 .settingsBar {
@@ -388,10 +389,55 @@
   display: none;
 }
 
-/* Mobile toggle buttons — hidden on desktop */
-.mobileToggleFloat,
-.mobileToggleInline {
-  display: none;
+/* Eye toggle — floating (when bar is hidden) */
+.toggleFloat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  top: 10px;
+  right: 20px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(245, 245, 240, 0.85);
+  border: none;
+  color: #bbb;
+  cursor: pointer;
+  z-index: 150;
+  padding: 0;
+}
+
+.toggleFloat:hover {
+  color: #888;
+}
+
+.toggleFloat:active {
+  color: #666;
+}
+
+/* Eye toggle — inline (inside the bar) */
+.toggleInline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: none;
+  border: none;
+  color: #bbb;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.toggleInline:hover {
+  color: #888;
+}
+
+.toggleInline:active {
+  color: #666;
 }
 
 /* Responsive */
@@ -404,21 +450,8 @@
     font-size: 16px;
   }
 
-  /* Disable hover behavior on mobile */
-  .hoverZone {
-    height: auto;
-    pointer-events: none;
-  }
-
-  /* Hide bar by default on mobile — only eye button can show it */
   .settingsBar {
-    display: none;
     padding: 10px 12px;
-  }
-
-  /* When toggled visible via eye button */
-  .settingsBarVisible {
-    display: flex;
   }
 
   .shortcutsWrap {
@@ -439,46 +472,4 @@
     line-height: 0;
   }
 
-  /* Floating eye toggle — when bar is hidden */
-  .mobileToggleFloat {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: fixed;
-    top: 10px;
-    right: 12px;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: rgba(245, 245, 240, 0.85);
-    border: none;
-    color: #bbb;
-    cursor: pointer;
-    z-index: 150;
-    padding: 0;
-  }
-
-  .mobileToggleFloat:active {
-    color: #666;
-  }
-
-  /* Inline eye toggle — inside the bar */
-  .mobileToggleInline {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: none;
-    border: none;
-    color: #bbb;
-    cursor: pointer;
-    padding: 0;
-    flex-shrink: 0;
-  }
-
-  .mobileToggleInline:active {
-    color: #666;
-  }
 }

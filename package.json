@@ -12,6 +12,8 @@
     "web:dev": "npm run dev -w @hermes/web",
     "web:build": "npm run build -w @hermes/web",
     "server:dev": "npm run dev -w server",
+    "server:dev:staging": "DOTENV_CONFIG_PATH=server/.env.staging npm run server:dev",
+    "web:dev:staging": "npm run dev:staging -w @hermes/web",
     "server:typecheck": "npm run typecheck -w server",
     "test:web": "playwright test",
     "lint": "eslint ."

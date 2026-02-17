@@ -7,6 +7,8 @@ import useAuth from './hooks/useAuth';
 const FocusPage = lazy(() => import('./pages/FocusPage/FocusPage'));
 const AuthConfirmPage = lazy(() => import('./pages/AuthConfirmPage/AuthConfirmPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage/ResetPasswordPage'));
+const SignupPage = lazy(() => import('./pages/SignupPage/SignupPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage/LoginPage'));
 
 function NotFound() {
   return (
@@ -65,8 +67,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<RedirectToLatestProject />} />
           <Route path="/projects/:projectId" element={<FocusPage />} />
-          <Route path="/login" element={<Navigate to="/" replace />} />
-          <Route path="/signup" element={<Navigate to="/" replace />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<Navigate to="/" replace />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/auth/confirm" element={<AuthConfirmPage />} />

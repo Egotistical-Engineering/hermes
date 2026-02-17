@@ -4,25 +4,21 @@ An AI-guided writing tool that structures your thinking without doing the writin
 
 ## How It Works
 
-Hermes walks you through a multi-stage workflow to go from raw ideas to a finished essay:
+Hermes is a multi-page markdown editor with an AI assistant that reads your writing and gives contextual feedback directly on the text.
 
-1. **Interview** — Hermes asks probing questions one at a time, clarifying your thesis and challenging weak reasoning.
-2. **Skeleton Draft** — The AI generates scaffolding from your brain dump and interview — not your essay, but something to react against.
-3. **Rewrite** — You rewrite the skeleton in your own words. Inline coaching tools are available on selected text: *Expand*, *Challenge*, *Restructure*.
-4. **Feedback** — The AI critiques your rewrite — highlighting strengths, surfacing questions, pointing to areas that could be stronger. It never rewrites for you.
-5. **Complete** — Your final draft is ready. Start a new version at any point during rewriting to continue iterating.
-
-A contextual assistant lives alongside the editor, providing inline highlights (questions, suggestions, edits, voice checks, weakness flags, evidence gaps, wordiness, fact-checks) directly on your text.
-
-Prior completed projects are passed as context so the AI learns your voice and style over time.
+- **5-tab editor** with focus mode — write in markdown with auto-save to Supabase and localStorage
+- **Contextual AI assistant** streams responses via SSE, reading your document in real time
+- **Inline highlights** (8 types: question, suggestion, edit, voice, weakness, evidence, wordiness, factcheck) placed directly on your text
+- **Accept or dismiss** each highlight, or reply to start a conversation about it
+- **Voice consistency** — prior completed essays are passed as context so the AI learns your style over time
 
 ## Stack
 
 **Frontend**: React 19, Vite 7, react-router-dom, CSS Modules
 **Backend**: Express 5, Anthropic Claude, TypeScript
 **Database**: Supabase (PostgreSQL, Auth)
-**CI**: GitHub Actions (typecheck, build, test, server deploy check, lint)
-**Observability**: Sentry (error tracking), Plausible (analytics)
+**CI**: GitHub Actions (typecheck, build, test, server deploy check, lint, staging deploy on PRs)
+**Observability**: Sentry (error tracking)
 
 ## Setup
 
@@ -38,6 +34,7 @@ VITE_CHAT_API_URL=http://localhost:3003
 ANTHROPIC_API_KEY=...
 SUPABASE_URL=...
 SUPABASE_SERVICE_KEY=...
+SUPABASE_ANON_KEY=...
 
 # Run both (web on 5176, server on 3003)
 npm run dev
@@ -53,9 +50,6 @@ npm run server:dev   # Backend only
 apps/web/src/
   pages/
     FocusPage/              # Main writing workspace (assistant + editor)
-    LoginPage/              # Login
-    SignupPage/             # Signup
-    ForgotPasswordPage/     # Password reset request
     ResetPasswordPage/      # Password reset
     AuthConfirmPage/        # Email confirmation handler
   components/
@@ -79,11 +73,11 @@ server/src/
 ## Routes
 
 ```
-/                       → Redirect to latest project (or freeform editor if not logged in)
+/                       → Redirect to latest project
 /projects/:projectId    → FocusPage (writing workspace)
-/login                  → Login
-/signup                 → Signup
-/forgot-password        → Password reset request
+/login                  → Redirect to / (login lives in UserMenu dropdown)
+/signup                 → Redirect to / (signup lives in UserMenu dropdown)
+/forgot-password        → Redirect to / (forgot password lives in UserMenu dropdown)
 /reset-password         → Password reset
 /auth/confirm           → Email confirmation
 ```
