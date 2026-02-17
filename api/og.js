@@ -100,12 +100,39 @@ export default async function handler(request) {
             props: {
               style: {
                 display: 'flex',
+                alignItems: 'center',
                 justifyContent: 'flex-end',
+                gap: '8px',
                 padding: '0 80px 40px',
                 fontSize: '20px',
                 color: '#bbb',
               },
-              children: 'dearhermes.com',
+              children: [
+                {
+                  type: 'svg',
+                  props: {
+                    width: '20',
+                    height: '20',
+                    viewBox: '0 0 18 18',
+                    fill: 'none',
+                    children: [
+                      {
+                        type: 'path',
+                        props: { d: 'M9 17L9 4', stroke: '#bbb', strokeWidth: '1.5', strokeLinecap: 'round' },
+                      },
+                      {
+                        type: 'path',
+                        props: { d: 'M9 4C7.5 4 4 3.5 2 1C3.5 4 4.5 7 5 9C6 7 7.5 5.5 9 4Z', fill: '#bbb' },
+                      },
+                      {
+                        type: 'path',
+                        props: { d: 'M9 4C10.5 4 14 3.5 16 1C14.5 4 13.5 7 13 9C12 7 10.5 5.5 9 4Z', fill: '#bbb' },
+                      },
+                    ],
+                  },
+                },
+                'dearhermes.com',
+              ],
             },
           },
         ],
