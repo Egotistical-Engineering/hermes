@@ -16,6 +16,12 @@ export {
   fetchAssistantConversation,
   saveAssistantConversation,
   startAssistantStream,
+  generateShortId,
+  generateSlug,
+  publishProject,
+  unpublishProject,
+  fetchPublishedEssay,
+  updatePublishSettings,
 } from './writing';
 
 export { WELCOME_PAGES, WELCOME_HIGHLIGHTS } from './welcome-seed';
@@ -26,4 +32,5 @@ export type {
   WritingProjectRow,
   AssistantMessage,
   Highlight,
+  PublishedEssay,
 } from './writing';

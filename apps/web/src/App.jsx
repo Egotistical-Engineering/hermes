@@ -5,6 +5,7 @@ import styles from './App.module.css';
 import useAuth from './hooks/useAuth';
 
 const FocusPage = lazy(() => import('./pages/FocusPage/FocusPage'));
+const ReadPage = lazy(() => import('./pages/ReadPage/ReadPage'));
 const AuthConfirmPage = lazy(() => import('./pages/AuthConfirmPage/AuthConfirmPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage/ResetPasswordPage'));
 const SignupPage = lazy(() => import('./pages/SignupPage/SignupPage'));
@@ -76,6 +77,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<RedirectToLatestProject />} />
           <Route path="/projects/:projectId" element={<FocusPage />} />
+          <Route path="/read/:shortId/:slug" element={<ReadPage />} />
+          <Route path="/read/:shortId" element={<ReadPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<Navigate to="/" replace />} />

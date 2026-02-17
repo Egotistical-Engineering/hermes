@@ -1,0 +1,232 @@
+.wrap {
+  position: relative;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  padding: 4px 6px;
+  color: #999;
+  cursor: pointer;
+  line-height: 0;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.trigger:hover {
+  color: #1a1a1a;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.triggerPublished {
+  color: #6b9e7a;
+  border-color: rgba(107, 158, 122, 0.3);
+}
+
+.triggerPublished:hover {
+  color: #5a8a68;
+  border-color: rgba(107, 158, 122, 0.5);
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 300px;
+  background: #f5f5f0;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 16px;
+  z-index: 300;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.heading {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 12px;
+}
+
+.label {
+  display: block;
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 4px;
+}
+
+.input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  background: #fff;
+  color: #1a1a1a;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.input:focus {
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+.field {
+  margin-bottom: 12px;
+}
+
+.tabList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tabCheck {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #666;
+  cursor: pointer;
+}
+
+.tabCheck input[type="checkbox"] {
+  accent-color: #1a1a1a;
+}
+
+.tabDot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.publishBtn {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #fff;
+  background: #1a1a1a;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: background 150ms ease;
+}
+
+.publishBtn:hover {
+  background: #333;
+}
+
+.publishBtn:disabled {
+  background: #ccc;
+  cursor: default;
+}
+
+.note {
+  font-size: 11px;
+  color: #bbb;
+  margin-top: 8px;
+  text-align: center;
+}
+
+/* Published state */
+.urlRow {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.urlDisplay {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Menlo', monospace;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copyBtn {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #666;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.copyBtn:hover {
+  color: #1a1a1a;
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+.openLink {
+  display: inline-block;
+  font-size: 12px;
+  color: #999;
+  text-decoration: underline;
+  text-decoration-color: rgba(0, 0, 0, 0.15);
+  text-underline-offset: 2px;
+  margin-bottom: 12px;
+}
+
+.openLink:hover {
+  color: #666;
+}
+
+.unpublishBtn {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #c44;
+  background: none;
+  border: 1px solid rgba(204, 68, 68, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.unpublishBtn:hover {
+  background: rgba(204, 68, 68, 0.05);
+  border-color: rgba(204, 68, 68, 0.35);
+}
+
+.warning {
+  font-size: 11px;
+  color: #c44;
+  margin-top: 6px;
+  text-align: center;
+}
+
+.separator {
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  margin: 12px 0;
+}
+
+@media (max-width: 640px) {
+  .trigger {
+    display: none;
+  }
+}

@@ -63,14 +63,18 @@
 }
 
 .focusBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 13px;
   color: #999;
   background: none;
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 4px;
-  padding: 4px 10px;
+  padding: 4px 6px;
   cursor: pointer;
+  line-height: 0;
   transition: color 150ms ease, border-color 150ms ease;
 }
 
@@ -385,9 +389,87 @@
   background: rgba(233, 30, 99, 0.25);
 }
 
-/* Focus button inner spans — desktop shows label, mobile shows icon */
-.focusIcon {
+/* Actions menu — hidden on desktop, visible on mobile */
+.actionsWrap {
   display: none;
+  position: relative;
+}
+
+.actionsBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  padding: 4px 6px;
+  color: #999;
+  cursor: pointer;
+  line-height: 0;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.actionsBtn:hover {
+  color: #1a1a1a;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.actionsMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  background: #f5f5f0;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  z-index: 300;
+  overflow: hidden;
+}
+
+.actionsMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  text-align: left;
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  color: #1a1a1a;
+  transition: background 100ms ease;
+}
+
+.actionsMenuItem:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.actionsMenuItem svg {
+  flex-shrink: 0;
+  color: #999;
+}
+
+.actionsMenuInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  color: #bbb;
+}
+
+/* Focus button — always icon-only */
+.focusLabel {
+  display: none;
+}
+
+.focusIcon {
+  display: flex;
 }
 
 /* Eye toggle — floating (when bar is hidden) */
@@ -459,18 +541,18 @@
     display: none;
   }
 
-  /* Focus: icon-only on mobile */
-  .focusLabel {
+  /* Hide focus button on mobile — moved into actions menu */
+  .focusBtn {
     display: none;
   }
 
-  .focusIcon {
-    display: flex;
+  /* Hide word count — moved into actions menu */
+  .wordCount {
+    display: none;
   }
 
-  .focusBtn {
-    padding: 4px 6px;
-    line-height: 0;
+  /* Show actions menu on mobile */
+  .actionsWrap {
+    display: block;
   }
-
 }

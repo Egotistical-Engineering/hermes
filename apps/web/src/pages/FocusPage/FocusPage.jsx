@@ -15,6 +15,7 @@ import FocusChatWindow from './FocusChatWindow';
 import HighlightPopover from './HighlightPopover';
 import PageTabs, { EMPTY_PAGES, TAB_KEYS } from './PageTabs';
 import ProjectSwitcher from './ProjectSwitcher';
+import ShareButton from './ShareButton';
 import UserMenu from './UserMenu';
 import SignupToast from '../../components/SignupToast/SignupToast';
 import styles from './FocusPage.module.css';
@@ -29,10 +30,22 @@ export default function FocusPage() {
   const { projectId } = useParams();
   const { session } = useAuth();
   const [projectTitle, setProjectTitle] = useState('');
+  const [publishState, setPublishState] = useState({
+    published: false,
+    shortId: null,
+    slug: null,
+    authorName: '',
+    publishedTabs: [],
+    publishedAt: null,
+  });
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [_dropdownOpen, setDropdownOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const shortcutsRef = useRef(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [postCopied, setPostCopied] = useState(false);
+  const actionsRef = useRef(null);
   const [wordCount, setWordCount] = useState(0);
   const [activeTab, setActiveTab] = useState('coral');
   const [pages, setPages] = useState({ ...EMPTY_PAGES });
@@ -55,11 +68,20 @@ export default function FocusPage() {
 
   const isLoggedIn = !!session;
 
-  // Load project title
+  // Load project title and publish state
   useEffect(() => {
     if (!projectId || !isLoggedIn) return;
     fetchWritingProject(projectId).then((project) => {
-      if (project?.title) setProjectTitle(project.title);
+      if (!project) return;
+      if (project.title) setProjectTitle(project.title);
+      setPublishState({
+        published: project.published,
+        shortId: project.shortId,
+        slug: project.slug,
+        authorName: project.authorName,
+        publishedTabs: project.publishedTabs,
+        publishedAt: project.publishedAt,
+      });
     }).catch(() => {});
   }, [projectId, isLoggedIn]);
 
@@ -333,6 +355,10 @@ export default function FocusPage() {
     return editor.getMarkdown();
   }, [editor]);
 
+  const handlePublishChange = useCallback((updates) => {
+    setPublishState((prev) => ({ ...prev, ...updates }));
+  }, []);
+
   // Close shortcuts popover on click outside
   useEffect(() => {
     if (!shortcutsOpen) return;
@@ -344,6 +370,40 @@ export default function FocusPage() {
     document.addEventListener('mousedown', handleMouseDown);
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, [shortcutsOpen]);
+
+  // Close actions menu on outside click
+  useEffect(() => {
+    if (!actionsOpen) return;
+    function handleMouseDown(e) {
+      if (actionsRef.current && !actionsRef.current.contains(e.target)) {
+        setActionsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [actionsOpen]);
+
+  // Escape key closes actions menu
+  useEffect(() => {
+    if (!actionsOpen) return;
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        setActionsOpen(false);
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [actionsOpen]);
+
+  const handleCopyPost = useCallback(() => {
+    if (!editor) return;
+    const md = editor.getMarkdown();
+    navigator.clipboard.writeText(md).then(() => {
+      setPostCopied(true);
+      setTimeout(() => setPostCopied(false), 2000);
+    });
+    setActionsOpen(false);
+  }, [editor]);
 
   const focusLabel = focusMode === 'off' ? 'Focus: Off' : 'Focus: On';
 
@@ -396,6 +456,9 @@ export default function FocusPage() {
           )}
 
           <div className={styles.settingsRight}>
+            <span className={styles.wordCount}>
+              {wordCount} {wordCount === 1 ? 'word' : 'words'}
+            </span>
             <button
               className={`${styles.focusBtn} ${focusMode !== 'off' ? styles.focusBtnActive : ''}`}
               onClick={cycleFocusMode}
@@ -404,6 +467,21 @@ export default function FocusPage() {
               <span className={styles.focusLabel}>{focusLabel}</span>
               <span className={styles.focusIcon}>{focusIcon}</span>
             </button>
+            {isLoggedIn && projectId && (
+              <ShareButton
+                projectId={projectId}
+                projectTitle={projectTitle}
+                pages={pages}
+                published={publishState.published}
+                shortId={publishState.shortId}
+                slug={publishState.slug}
+                authorName={publishState.authorName}
+                publishedTabs={publishState.publishedTabs}
+                onPublishChange={handlePublishChange}
+                isOpen={shareOpen}
+                onOpenChange={setShareOpen}
+              />
+            )}
             {/* Shortcuts reference — desktop only */}
             <div className={styles.shortcutsWrap} ref={shortcutsRef}>
               <button
@@ -443,9 +521,66 @@ export default function FocusPage() {
                 </div>
               )}
             </div>
-            <span className={styles.wordCount}>
-              {wordCount} {wordCount === 1 ? 'word' : 'words'}
-            </span>
+            {/* Mobile actions menu */}
+            <div className={styles.actionsWrap} ref={actionsRef}>
+              <button
+                className={styles.actionsBtn}
+                onClick={() => setActionsOpen((v) => !v)}
+                title="Actions"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                  <circle cx="3" cy="8" r="1.5" />
+                  <circle cx="8" cy="8" r="1.5" />
+                  <circle cx="13" cy="8" r="1.5" />
+                </svg>
+              </button>
+              {actionsOpen && (
+                <div className={styles.actionsMenu}>
+                  <div className={styles.actionsMenuInfo}>
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <path d="M2 13h12M2 9h8M2 5h12M2 1h5" />
+                    </svg>
+                    {wordCount} {wordCount === 1 ? 'word' : 'words'}
+                  </div>
+                  <button
+                    className={styles.actionsMenuItem}
+                    onClick={() => {
+                      cycleFocusMode();
+                      setActionsOpen(false);
+                    }}
+                  >
+                    {focusIcon}
+                    {focusLabel}
+                  </button>
+                  {isLoggedIn && projectId && (
+                    <button
+                      className={styles.actionsMenuItem}
+                      onClick={() => {
+                        setShareOpen(true);
+                        setActionsOpen(false);
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4 12V14H12V12" />
+                        <path d="M8 10V2" />
+                        <path d="M5 5L8 2L11 5" />
+                      </svg>
+                      Share post
+                    </button>
+                  )}
+                  <button
+                    className={styles.actionsMenuItem}
+                    onClick={handleCopyPost}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="5" y="5" width="9" height="9" rx="1" />
+                      <path d="M11 5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h2" />
+                    </svg>
+                    {postCopied ? 'Copied!' : 'Copy post'}
+                  </button>
+                </div>
+              )}
+            </div>
             <UserMenu
               onDropdownOpen={() => setDropdownOpen(true)}
               onDropdownClose={() => setDropdownOpen(false)}
