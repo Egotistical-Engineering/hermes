@@ -1,32 +1,45 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { validateInviteCode, signupWithInvite, consumeInviteCode } from '@hermes/api';
 import useAuth from '../../hooks/useAuth';
 import styles from './SignupPage.module.css';
 
 export default function SignupPage() {
   const { session, signInWithGoogle } = useAuth();
+  const [step, setStep] = useState('invite'); // 'invite' | 'signup' | 'done'
+  const [inviteCode, setInviteCode] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [done, setDone] = useState(false);
 
   if (session) return <Navigate to="/" replace />;
 
-  const handleSubmit = async (e) => {
+  const handleInviteSubmit = async (e) => {
     e.preventDefault();
     if (loading) return;
     setError('');
     setLoading(true);
 
     try {
-      const { error: err } = await supabase.auth.signUp({ email, password });
-      if (err) {
-        setError(err.message);
-      } else {
-        setDone(true);
-      }
+      await validateInviteCode(inviteCode);
+      setStep('signup');
+    } catch (err) {
+      setError(err.message || 'Invalid or expired invite code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    if (loading) return;
+    setError('');
+    setLoading(true);
+
+    try {
+      await signupWithInvite(email, password, inviteCode);
+      setStep('done');
     } catch (err) {
       setError(err.message || 'Failed to create account');
     } finally {
@@ -34,24 +47,71 @@ export default function SignupPage() {
     }
   };
 
-  if (done) {
+  const handleGoogleSignup = async () => {
+    if (loading) return;
+    setError('');
+    setLoading(true);
+
+    try {
+      await consumeInviteCode(inviteCode);
+      signInWithGoogle();
+    } catch (err) {
+      setError(err.message || 'Invalid or expired invite code');
+      setLoading(false);
+    }
+  };
+
+  if (step === 'done') {
     return (
       <main className={styles.page}>
         <div className={styles.card}>
-          <h1 className={styles.title}>Check your email</h1>
+          <h1 className={styles.title}>Account created</h1>
           <p className={styles.confirmText}>
-            A confirmation link was sent to <strong>{email}</strong>. Click it to activate your account.
+            Your account has been created. You can now sign in.
           </p>
-          <Link to="/" className={styles.backLink}>Back to Hermes</Link>
+          <Link to="/login" className={styles.backLink}>Go to login</Link>
         </div>
       </main>
     );
   }
 
+  if (step === 'invite') {
+    return (
+      <main className={styles.page}>
+        <form className={styles.card} onSubmit={handleInviteSubmit}>
+          <h1 className={styles.title}>Sign up</h1>
+          <p className={styles.confirmText}>
+            Hermes is in early beta. Enter your invite code to create an account.
+          </p>
+          {error && <p className={styles.error}>{error}</p>}
+          <label className={styles.label}>
+            Invite code
+            <input
+              type="text"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+              className={styles.input}
+              required
+              autoFocus
+              autoComplete="off"
+            />
+          </label>
+          <button type="submit" className={styles.primaryBtn} disabled={loading}>
+            {loading ? 'Checking...' : 'Continue'}
+          </button>
+          <p className={styles.switchText}>
+            Already have an account? <Link to="/login" className={styles.switchLink}>Log in</Link>
+          </p>
+        </form>
+      </main>
+    );
+  }
+
+  // step === 'signup'
   return (
     <main className={styles.page}>
-      <form className={styles.card} onSubmit={handleSubmit}>
-        <h1 className={styles.title}>Sign up</h1>
+      <form className={styles.card} onSubmit={handleSignup}>
+        <h1 className={styles.title}>Create your account</h1>
         {error && <p className={styles.error}>{error}</p>}
         <label className={styles.label}>
           Email
@@ -79,7 +139,7 @@ export default function SignupPage() {
           {loading ? 'Creating account...' : 'Sign up'}
         </button>
         <div className={styles.divider}>or</div>
-        <button type="button" className={styles.googleBtn} onClick={signInWithGoogle}>
+        <button type="button" className={styles.googleBtn} onClick={handleGoogleSignup} disabled={loading}>
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>

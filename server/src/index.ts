@@ -5,6 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import assistantRouter from './routes/assistant.js';
+import authRouter from './routes/auth.js';
 import logger from './lib/logger.js';
 
 Sentry.init({
@@ -49,6 +50,7 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.use('/api/auth', rateLimit({ windowMs: 60_000, max: 10, standardHeaders: true, legacyHeaders: false }), authRouter);
 app.use('/api/assistant', rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false }), assistantRouter);
 
 // Sentry error handler (must be after all routes)

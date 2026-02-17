@@ -89,6 +89,12 @@ Transitions are explicit via `POST /api/writing/status`. Each stage is persisted
 
 - `POST /api/assistant/chat` — contextual assistant chat with inline highlights (SSE)
 
+**Auth** (`server/src/routes/auth.ts`):
+
+- `POST /api/auth/validate-invite` — check if invite code is valid (no usage increment)
+- `POST /api/auth/signup` — create user with invite code (email/password, auto-confirmed)
+- `POST /api/auth/use-invite` — consume invite code use (for Google OAuth flow)
+
 **Planned** (to be built in `server/src/routes/writing.ts`):
 
 - `POST /api/writing/status` — advance project status (`{ projectId, status }`)
@@ -153,11 +159,21 @@ npm run server:dev:staging
 
 ## Supabase
 
-- **Project ID**: Set in your Supabase dashboard (see `.env`)
+### Environment mapping
+
+| Environment | Supabase Project | Project ID |
+|---|---|---|
+| Local dev (`npm run dev`) | hermes-staging | `jrqajnmudggfyghmyrun` |
+| Staging (`npm run dev:staging`) | hermes-staging | `jrqajnmudggfyghmyrun` |
+| Vercel preview / `staging.dearhermes.com` | hermes-staging | `jrqajnmudggfyghmyrun` |
+| Vercel production / `dearhermes.com` | hermes (production) | `oddczcritnsiahruqqaw` |
+
+Production credentials are **never** stored in local env files. They are only set in Vercel and Railway dashboards.
+
 - **Region**: us-east-1
-- **Tables**: `projects`, `brain_dumps`, `interviews`, `drafts`, `feedback`, `assistant_conversations`
-- **Migration**: Single file at `supabase/migrations/00001_initial_schema.sql`
-- **RLS**: Owner-scoped — authenticated users can only read/write their own data
+- **Tables**: `projects`, `brain_dumps`, `interviews`, `drafts`, `feedback`, `assistant_conversations`, `invite_codes`
+- **Migrations**: `supabase/migrations/` (00001 initial, 00002 pages, 00003 publishing, 00004 invite codes)
+- **RLS**: Owner-scoped — authenticated users can only read/write their own data. Published projects are publicly readable.
 
 ### Data conventions
 
@@ -167,7 +183,17 @@ npm run server:dev:staging
 
 ## Auth
 
-Email/password via Supabase Auth. `AuthContext` provides `session`, `signIn`, `signOut`. Writing pages are wrapped in `RequireAuth`.
+Email/password via Supabase Auth, gated behind invite codes. `AuthContext` provides `session`, `signIn`, `signOut`. Writing pages are wrapped in `RequireAuth`.
+
+### Invite code signup flow
+
+Signup requires a valid invite code (max 25 uses per code). The flow:
+
+1. User enters invite code → validated via `POST /api/auth/validate-invite`
+2. User fills email/password → account created via `POST /api/auth/signup` (auto-confirmed)
+3. Google OAuth: invite code consumed via `POST /api/auth/use-invite` before redirect
+
+Users created with invite codes are auto-confirmed (no email verification needed). The `invite_codes` table has no RLS policies — only the server (service key) accesses it.
 
 ### Server env vars
 
@@ -247,7 +273,8 @@ Add the route to `apps/web/src/App.jsx`. Wrap in `RequireAuth` if auth is requir
 ## Gotchas
 
 - Dev server is port **5176** (not 5173)
-- Supabase email confirmation is **enabled** — users must click the confirmation link before logging in
+- Local dev and staging both use **hermes-staging** Supabase — not production
+- Invite-code signups are **auto-confirmed** via `admin.createUser()` — no email verification needed
 - Toast notifications use theme tokens for consistent appearance
 - Test dev credentials (email/password) are in `server/.env`
 

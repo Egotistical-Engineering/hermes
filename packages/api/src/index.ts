@@ -24,6 +24,8 @@ export {
   updatePublishSettings,
 } from './writing';
 
+export { validateInviteCode, signupWithInvite, consumeInviteCode } from './auth';
+
 export { WELCOME_PAGES, WELCOME_HIGHLIGHTS } from './welcome-seed';
 
 export type {
