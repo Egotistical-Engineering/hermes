@@ -2,6 +2,17 @@
 
 An AI-guided writing tool that structures your thinking without doing the writing for you. Built on the Dignified Technology design philosophy. React 19, Supabase, Express 5, Anthropic Claude.
 
+## Open Source — Security Rules
+
+This is an **open-source repository**. Every file, commit, and PR is publicly visible. Follow these rules strictly:
+
+- **Never commit secrets**: No API keys, tokens, passwords, DSNs, or credentials in code or config files. All secrets go in `.env` files (which are `.gitignore`d).
+- **Never hardcode URLs with credentials**: No Supabase service keys, Sentry DSNs, or third-party tokens inline.
+- **Audit before committing**: Before staging files, verify no `.env`, credentials, or private keys are included. If in doubt, ask.
+- **Plans and PR descriptions**: Do not include real API keys, passwords, or internal URLs. Use placeholders like `YOUR_API_KEY` or `<redacted>`.
+- **Review diffs carefully**: Check `git diff` output for accidental secret leaks before every commit.
+- **Environment-specific values**: Always reference env vars (`process.env.X`, `import.meta.env.VITE_X`) — never inline the actual values.
+
 ## Quick Start
 
 ```bash
