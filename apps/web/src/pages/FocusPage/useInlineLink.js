@@ -315,10 +315,10 @@ function createInlineLinkExtension(linkZoneRef, onLinkHover, onLinkExpand, onLin
             },
 
             handleClick(view, pos, event) {
-              const target = event.target;
-              if (target.nodeName !== 'A') return false;
+              const anchor = event.target.closest('a');
+              if (!anchor) return false;
 
-              const href = target.getAttribute('href');
+              const href = anchor.getAttribute('href');
               if (!href) return false;
 
               // Cmd/Ctrl+click: open in new tab
@@ -328,7 +328,7 @@ function createInlineLinkExtension(linkZoneRef, onLinkHover, onLinkExpand, onLin
               }
 
               // Regular click: expand link to [text](url) for editing
-              const linkRect = target.getBoundingClientRect();
+              const linkRect = anchor.getBoundingClientRect();
               onLinkExpand({ rect: linkRect, href });
               expandLinkToPattern(view, pos, linkZoneRef);
               return true;
@@ -336,25 +336,25 @@ function createInlineLinkExtension(linkZoneRef, onLinkHover, onLinkExpand, onLin
 
             handleDOMEvents: {
               mouseover(view, event) {
-                const target = event.target;
-                if (target.nodeName !== 'A') return false;
+                const anchor = event.target.closest('a');
+                if (!anchor) return false;
 
                 // Only trigger for links inside the editor
-                if (!target.closest('.tiptap')) return false;
+                if (!anchor.closest('.tiptap')) return false;
 
-                const rect = target.getBoundingClientRect();
-                const href = target.getAttribute('href') || '';
+                const rect = anchor.getBoundingClientRect();
+                const href = anchor.getAttribute('href') || '';
                 onLinkHover({ rect, href });
                 return false; // Don't prevent default
               },
 
               mouseout(view, event) {
-                const target = event.target;
-                if (target.nodeName !== 'A') return false;
+                const anchor = event.target.closest('a');
+                if (!anchor) return false;
 
-                // Check relatedTarget — if moving to another part of the same link, ignore
+                // Check relatedTarget — if moving within the same link, ignore
                 const related = event.relatedTarget;
-                if (related && related.nodeName === 'A' && related === target) return false;
+                if (related && related.closest('a') === anchor) return false;
 
                 onLinkHover(null);
                 return false;

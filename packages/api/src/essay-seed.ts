@@ -10,7 +10,9 @@ export const ESSAY_OUTLINE = `# What Does a Tool Owe You?
 ## The Durable Case
 ## The Answer`;
 
-export const ESSAY_MARKDOWN = `There\u2019s a question I keep coming back to when I\u2019m building something: what does this tool owe the person using it?
+export const ESSAY_MARKDOWN = `## On dignified technology, AI, and the design choices that determine whether technology makes us more or less human
+
+There\u2019s a question I keep coming back to when I\u2019m building something: what does this tool owe the person using it?
 
 Not \u2018what does it do for them\u2019 \u2014 that\u2019s a feature question. And not \u2018does it make them more productive\u2019 \u2014 that\u2019s an efficiency question. I mean something harder than both of those: what does it owe them in the human sense? What is it taking from them in exchange for what it\u2019s giving? And is that trade one they would have chosen if anyone had asked?
 
@@ -28,15 +30,15 @@ One way: you use AI to generate the output. The user types a prompt, the tool pr
 
 The other way: you use AI to deepen the process. The tool asks questions that draw out what you actually think. It surfaces three angles you hadn\u2019t considered. It challenges the weakest assumption in the draft. It finds connections to other work you\u2019ve done and forgotten about. It helps you go further into the idea than you could have gone alone \u2014 and then the work you produce feels genuinely yours, more completely yours than it would have been without the tool, because it directly conspired in helping you go deeper. Just like a true collaborator would.
 
-Both approaches apply the same underlying technology. The difference is entirely in what the people who built it decided the tool was for. Whether it was designed to produce output or to deepen thinking. Whether it treats human involvement as the bottleneck, or as the whole point. And what is the price to be paid for the fragility of borrowed intelligence.
+Both approaches apply the same underlying technology. The difference is entirely in what the people who built it decided the tool was for. Whether it was designed to produce output or to deepen thinking. Whether it treats human involvement as the bottleneck, or as the whole point. And what is the price to be paid for [the fragility of borrowed intelligence](https://www.aishwaryadoingthings.com/the-fragility-of-borrowed-intelligence).
 
-There\u2019s another dimension here that I think is undernamed. Agency \u2014 in the way we usually talk about it \u2014 is your capacity to act. But there\u2019s something prior to that: your capacity to govern what reaches you. I think of this as input agency. Most tools we build today have been designed to maximize other people\u2019s access to our attention while giving us almost no sovereignty over what enters our field. The notification you didn\u2019t ask for. The algorithmic insertion you never consented to. The default is open; opting out is the labor. And that labor \u2014 the constant discernment required just to maintain your own attentional sovereignty \u2014 is itself an unconsented cost. A tool that erodes your input agency is already failing the dignity test before you\u2019ve even started using it for its stated purpose.
+There\u2019s another dimension here that I think is undernamed. Agency \u2014 in the way we usually talk about it \u2014 is your capacity to act. But there\u2019s something prior to that: your capacity to govern what reaches you. I think of this as **input agency**. Most tools we build today have been designed to maximize other people\u2019s access to our attention while giving us almost no sovereignty over what enters our field. The notification you didn\u2019t ask for. The algorithmic insertion you never consented to. The default is open; opting out is the labor. And that labor \u2014 the constant discernment required just to maintain your own attentional sovereignty \u2014 is itself an unconsented cost. A tool that erodes your input agency is already failing the dignity test before you\u2019ve even started using it for its stated purpose.
 
 ---
 
 I want to give a name to the design philosophy that chooses the second path, because naming things is how we start being able to choose them deliberately.
 
-I\u2019ll call it Dignified Technology: tools that protect and elevate the creative, expressive, and irreplaceable dimensions of human work. Tools that treat those dimensions \u2014 creativity, self-expression, authorship, discernment, thinking, attention \u2014 as devotional practices rather than inefficiencies to be optimized away.
+I\u2019ll call it [**Dignified Technology**](https://github.com/xaelophone/dignified-technology): tools that protect and elevate the creative, expressive, and irreplaceable dimensions of human work. Tools that treat those dimensions \u2014 creativity, self-expression, authorship, discernment, thinking, attention \u2014 as devotional practices rather than inefficiencies to be optimized away.
 
 That phrase, \u2018devotional practices,\u2019 is doing some work here and I want to explain it. When I say that creativity is a devotional practice, I don\u2019t mean it in a religious sense. I mean that these are things we do that have intrinsic value \u2014 value in the doing, not just in the output. The act of writing an essay teaches you what you think. The act of designing something teaches you what you care about. The act of working through a problem teaches you how to think. These processes can\u2019t be outsourced without losing what made them valuable. You can\u2019t delegate your thinking to a tool and still expect to truly understand something. The transformation is in the process, not the outcome.
 
@@ -68,7 +70,7 @@ I\u2019ve been working in this way for the last year, and I\u2019m increasingly 
 
 Tools that make workers feel replaced breed animosity. Loyalty is fragile \u2014 it lasts exactly as long as someone feels valued, and therefore respected. Tools that make users feel more capable, more creative, more themselves produce loyalty, which compounds. Strong employee retention is downstream of whether the work was rewarding, which starts with tools that encourage meaningful ownership, quality, and impact.
 
-There\u2019s a broader movement forming around adjacent ideas \u2014 the Resonant Computing Manifesto, signed by people like Tim O\u2019Reilly and Kevin Kelly, applies Christopher Alexander\u2019s architectural theory to argue that software can either enliven or deaden us. The movement\u2019s diagnosis is sharp. What I\u2019m adding is the implementation layer: the values-as-spec template, the dignity metrics, the specific product decisions that turn these principles into something you can integrate into your work today.
+There\u2019s a broader movement forming around adjacent ideas \u2014 [the Resonant Computing Manifesto](https://resonantcomputing.org/), signed by people like Tim O\u2019Reilly and Kevin Kelly, applies Christopher Alexander\u2019s architectural theory to argue that software can either enliven or deaden us. The movement\u2019s diagnosis is sharp. What I\u2019m adding is the implementation layer: the values-as-spec template, the dignity metrics, the specific product decisions that turn these principles into something you can integrate into your work today.
 
 I\u2019ve signed it and I urge you to also sign it. They\u2019re also crowdsourcing theses for what it means to have dignified-resonant-computing.
 
@@ -87,6 +89,6 @@ Start there. Ask what the tool owes the person using it. Write down the answer. 
 The future of technology doesn\u2019t have to be a race to automate away everything that makes work meaningful \u2014 but only if we choose, deliberately, to build something that makes us more alive, will we live in a world of dignified technology.
 
 > \u201cWith few ambitions, most people allowed efficient machines to perform everyday tasks for them. Gradually, humans ceased to think, or dream... or truly live.\u201d
-> \u2014 Brian Herbert, *The Butlerian Jihad*
+> \u2014 **Brian Herbert**, *The Butlerian Jihad*
 
 Thank you to my collaborator [Aishwarya Khanduja](https://www.aishwaryadoingthings.com/) for her notes on this post.`;
