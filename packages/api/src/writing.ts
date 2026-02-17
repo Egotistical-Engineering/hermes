@@ -210,9 +210,10 @@ export async function updateWritingProject(
     .update(updates)
     .eq('id', projectId)
     .select('*')
-    .single<WritingProjectRow>();
+    .maybeSingle<WritingProjectRow>();
 
   if (error) throw error;
+  if (!data) throw new Error('Project not found');
   invalidateProject(projectId);
   return toWritingProject(data);
 }
@@ -315,14 +316,11 @@ export async function fetchAssistantConversation(projectId: string): Promise<Ass
     .from('assistant_conversations')
     .select('messages')
     .eq('project_id', projectId)
-    .single<{ messages: AssistantMessage[] }>();
+    .maybeSingle<{ messages: AssistantMessage[] }>();
 
-  if (error) {
-    if ((error as { code?: string }).code === 'PGRST116') return [];
-    throw error;
-  }
+  if (error) throw error;
 
-  const messages = data.messages || [];
+  const messages = data?.messages || [];
   setCache(conversationCache, projectId, messages);
   return messages;
 }
