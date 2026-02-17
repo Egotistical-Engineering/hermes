@@ -216,6 +216,12 @@
   border-color: rgba(0, 0, 0, 0.3);
 }
 
+.forgotLink {
+  text-align: right;
+  margin: 0 0 2px;
+  font-size: 11px;
+}
+
 .loginError {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 12px;

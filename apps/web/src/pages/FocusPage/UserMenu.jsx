@@ -9,15 +9,17 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
   const passwordInputRef = useRef(null);
   const loginEmailRef = useRef(null);
   const signupEmailRef = useRef(null);
+  const forgotEmailRef = useRef(null);
 
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState('menu'); // 'menu' | 'password' | 'login' | 'signup' | 'signupDone'
+  const [view, setView] = useState('menu'); // 'menu' | 'password' | 'login' | 'signup' | 'signupDone' | 'forgotPassword' | 'forgotPasswordDone'
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
+  const [forgotEmail, setForgotEmail] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -39,6 +41,7 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
     setLoginPassword('');
     setSignupEmail('');
     setSignupPassword('');
+    setForgotEmail('');
     setError('');
     setSuccess(false);
     onDropdownClose?.();
@@ -66,7 +69,7 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
     if (!open) return;
     const handleKey = (e) => {
       if (e.key === 'Escape') {
-        if (view === 'password' || view === 'login' || view === 'signup' || view === 'signupDone') {
+        if (view === 'password' || view === 'login' || view === 'signup' || view === 'signupDone' || view === 'forgotPassword' || view === 'forgotPasswordDone') {
           setView('menu');
           setError('');
         } else {
@@ -83,6 +86,7 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
     if (view === 'password' && passwordInputRef.current) passwordInputRef.current.focus();
     if (view === 'login' && loginEmailRef.current) loginEmailRef.current.focus();
     if (view === 'signup' && signupEmailRef.current) signupEmailRef.current.focus();
+    if (view === 'forgotPassword' && forgotEmailRef.current) forgotEmailRef.current.focus();
   }, [view]);
 
   // Auto-close on success
@@ -147,6 +151,24 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
       }
     } catch (err) {
       setError(err.message || 'Failed to create account');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(forgotEmail);
+      if (err) {
+        setError(err.message);
+      } else {
+        setView('forgotPasswordDone');
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to send reset link');
     } finally {
       setSubmitting(false);
     }
@@ -263,6 +285,11 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
                 onChange={(e) => setLoginPassword(e.target.value)}
                 required
               />
+              <div className={styles.forgotLink}>
+                <button type="button" className={styles.switchBtn} onClick={() => { setError(''); setView('forgotPassword'); }}>
+                  Forgot password?
+                </button>
+              </div>
               {error && <div className={styles.loginError}>{error}</div>}
               <button
                 type="submit"
@@ -352,6 +379,47 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
                 onClick={() => { setError(''); setView('login'); }}
               >
                 Go to login
+              </button>
+            </div>
+          ) : view === 'forgotPassword' ? (
+            <form className={styles.loginForm} onSubmit={handleForgotSubmit}>
+              <div className={styles.loginTitle}>Reset password</div>
+              <input
+                ref={forgotEmailRef}
+                className={styles.loginInput}
+                type="email"
+                placeholder="Email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                required
+              />
+              {error && <div className={styles.loginError}>{error}</div>}
+              <button
+                type="submit"
+                className={styles.loginSubmitBtn}
+                disabled={submitting}
+              >
+                {submitting ? 'Sending...' : 'Send reset link'}
+              </button>
+              <div className={styles.switchLink}>
+                Remember your password?{' '}
+                <button type="button" className={styles.switchBtn} onClick={() => { setError(''); setView('login'); }}>
+                  Log in
+                </button>
+              </div>
+            </form>
+          ) : view === 'forgotPasswordDone' ? (
+            <div className={styles.loginForm}>
+              <div className={styles.loginTitle}>Check your email</div>
+              <div className={styles.signupDoneText}>
+                A password reset link was sent to <strong>{forgotEmail}</strong>. Click it to set a new password.
+              </div>
+              <button
+                type="button"
+                className={styles.loginSubmitBtn}
+                onClick={() => { setError(''); setView('login'); }}
+              >
+                Back to sign in
               </button>
             </div>
           ) : (
