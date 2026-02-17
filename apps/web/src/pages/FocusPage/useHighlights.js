@@ -47,11 +47,12 @@ export function flatOffsetToPos(doc, flatOffset) {
 
 export function getDocFlatText(doc) {
   const parts = [];
-  let first = true;
-  doc.forEach((node) => {
-    if (!first) parts.push('\n');
-    first = false;
-    parts.push(node.textContent);
+  doc.descendants((node, pos) => {
+    if (node.isText) {
+      parts.push(node.text);
+    } else if (node.isBlock && pos > 0) {
+      parts.push('\n');
+    }
   });
   return parts.join('');
 }

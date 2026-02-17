@@ -42,7 +42,7 @@ export default function SignupToast({ wordCount, isLoggedIn }) {
   return (
     <div className={styles.toast}>
       <p className={styles.message}>
-        <Link to="/signup" className={styles.link}>Sign up</Link> to save your work
+        <Link to="/signup" className={styles.link}>Sign up</Link> to save
       </p>
       <button className={styles.dismiss} onClick={handleDismiss} aria-label="Dismiss">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">

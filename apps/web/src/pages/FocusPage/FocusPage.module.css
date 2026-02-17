@@ -276,6 +276,7 @@
   text-decoration: underline;
   text-decoration-color: rgba(0, 0, 0, 0.3);
   text-underline-offset: 2px;
+  cursor: text;
   transition: text-decoration-color 150ms ease;
 }
 

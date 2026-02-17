@@ -24,16 +24,18 @@ Most AI writing tools generate text for you. Hermes takes the opposite approach:
 
   amber: `# The Assistant
 
-The panel on the right is your AI writing assistant. It reads what you've written and responds with questions, suggestions, and observations — but it never writes *for* you.
+See the collapsible icon at the bottom of the page? That's your AI writing assistant. Open it to start a conversation — it reads what you've written and responds with questions, suggestions, and observations, but it never writes *for* you.
 
 ## Highlights
 
-When the assistant references a specific passage, it highlights that text directly in your editor. You can:
+When you ask the assistant for feedback or its opinion on your writing, it can highlight specific passages directly in your editor. Highlights only appear when you prompt them — the assistant won't mark up your text unprompted. You can:
 
 - **Hover** a highlight to see the comment
 - **Accept** a suggested edit with one click
 - **Dismiss** highlights you've addressed
 - **Reply** to continue the conversation about that passage
+
+For example, it might ask a probing question, offer a suggestion, propose a specific edit, note a voice inconsistency, identify a weakness, request supporting evidence, flag unnecessary wordiness, or raise a fact check.
 
 ## Philosophy
 
@@ -41,7 +43,7 @@ Hermes believes the act of writing is where thinking happens. If an AI writes yo
 
 Instead, the assistant helps you go deeper: challenging weak arguments, asking what you really intended, and surfacing connections you might have missed. It's a collaborator, not a ghostwriter.
 
-*The assistant requires a free account. [Sign up](/signup) to try it.*`,
+*The assistant is free to try — no credit card required. [Sign up](https://dearhermes.com/signup) to get started.*`,
 
   sage: `# About Hermes
 
@@ -55,8 +57,19 @@ You can read the full essay — [What Does a Tool Owe You?](https://dearhermes.c
 
 Hermes is open source. You can read the code, suggest improvements, or fork it for your own use.
 
-[GitHub repository](https://github.com/xaelmac/hermes)`,
+[GitHub repository](https://github.com/xaelophone/hermes)`,
 
   sky: '',
   lavender: '',
 };
+
+export const WELCOME_HIGHLIGHTS = [
+  { id: 'welcome-question', matchText: 'a probing question', type: 'question', comment: 'What exactly do you mean by this? Could you unpack the idea further?' },
+  { id: 'welcome-suggestion', matchText: 'a suggestion', type: 'suggestion', comment: 'Consider restructuring this section to lead with your strongest point.' },
+  { id: 'welcome-edit', matchText: 'a specific edit', type: 'edit', comment: 'This could be tighter.', suggestedEdit: 'a precise edit' },
+  { id: 'welcome-voice', matchText: 'a voice inconsistency', type: 'voice', comment: 'The tone shifts here — more formal than the rest of the piece.' },
+  { id: 'welcome-weakness', matchText: 'a weakness', type: 'weakness', comment: 'This claim needs stronger support to be convincing.' },
+  { id: 'welcome-evidence', matchText: 'supporting evidence', type: 'evidence', comment: 'Can you point to a specific example or source?' },
+  { id: 'welcome-wordiness', matchText: 'unnecessary wordiness', type: 'wordiness', comment: 'This phrase could be cut without losing meaning.' },
+  { id: 'welcome-factcheck', matchText: 'a fact check', type: 'factcheck', comment: 'Worth double-checking — is this accurate?' },
+];

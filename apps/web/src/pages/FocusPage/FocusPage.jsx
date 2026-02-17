@@ -10,6 +10,7 @@ import useAuth from '../../hooks/useAuth';
 import useFocusMode from './useFocusMode';
 import useHighlights, { getDocFlatText, flatOffsetToPos } from './useHighlights';
 import useInlineLink from './useInlineLink';
+import LinkTooltip from './LinkTooltip';
 import FocusChatWindow from './FocusChatWindow';
 import HighlightPopover from './HighlightPopover';
 import PageTabs, { EMPTY_PAGES, TAB_KEYS } from './PageTabs';
@@ -81,7 +82,7 @@ export default function FocusPage() {
     syncHighlights,
   } = useHighlights();
 
-  const { inlineLinkExtension } = useInlineLink();
+  const { inlineLinkExtension, linkTooltip, isMac } = useInlineLink();
 
   const editor = useEditor({
     extensions: [
@@ -214,8 +215,9 @@ export default function FocusPage() {
 
       // No localStorage found — seed with Welcome content for unauthenticated users
       if (!loadedPages && !isLoggedIn) {
-        const { WELCOME_PAGES } = await import('@hermes/api');
+        const { WELCOME_PAGES, WELCOME_HIGHLIGHTS } = await import('@hermes/api');
         loadedPages = { ...EMPTY_PAGES, ...WELCOME_PAGES };
+        if (WELCOME_HIGHLIGHTS) replaceHighlights(WELCOME_HIGHLIGHTS);
       }
 
       // Set title for unauth Welcome experience
@@ -323,8 +325,8 @@ export default function FocusPage() {
     switchingRef.current = false;
 
     setWordCount(getWordCount(editor.getText()));
-    replaceHighlights([]);
-  }, [editor, activeTab, storageKey, isLoggedIn, projectId, replaceHighlights]);
+    clearHighlight();
+  }, [editor, activeTab, storageKey, isLoggedIn, projectId, clearHighlight]);
 
   const handleCopy = useCallback(() => {
     if (!editor) return;
@@ -484,6 +486,9 @@ export default function FocusPage() {
         onAcceptEdit={handleAcceptEdit}
         onReply={handleReply}
       />
+
+      {/* Link tooltip */}
+      <LinkTooltip tooltip={linkTooltip} isMac={isMac} />
 
       {/* Floating chat window */}
       <FocusChatWindow

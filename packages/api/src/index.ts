@@ -18,7 +18,7 @@ export {
   startAssistantStream,
 } from './writing';
 
-export { WELCOME_PAGES } from './welcome-seed';
+export { WELCOME_PAGES, WELCOME_HIGHLIGHTS } from './welcome-seed';
 
 export type {
   WritingStatus,
