@@ -7,7 +7,7 @@ import styles from './ProjectSwitcher.module.css';
 
 const INITIAL_VISIBLE = 3;
 
-export default function ProjectSwitcher({ projectId, projectTitle, onDropdownOpen, onDropdownClose, onProjectRenamed, getMarkdown }) {
+export default function ProjectSwitcher({ projectId, projectTitle, onDropdownOpen, onDropdownClose, onProjectRenamed }) {
   const { session } = useAuth();
   const navigate = useNavigate();
   const wrapperRef = useRef(null);
@@ -15,7 +15,6 @@ export default function ProjectSwitcher({ projectId, projectTitle, onDropdownOpe
   const committingRef = useRef(false);
 
   const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [projects, setProjects] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -255,54 +254,9 @@ export default function ProjectSwitcher({ projectId, projectTitle, onDropdownOpe
         </button>
         <span className={styles.sep}>/</span>
         <span className={styles.titleWrap}>
-          <button
-            className={styles.titleCopyBtn}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!getMarkdown) return;
-              const md = getMarkdown();
-              if (md) {
-                navigator.clipboard.writeText(md).then(() => {
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1200);
-                });
-              }
-            }}
-          >
-            <span className={`${styles.projectTitle} ${copied ? styles.projectTitleHidden : ''}`}>
-              {projectTitle || 'New Project'}
-            </span>
-            <span className={`${styles.copiedLabel} ${copied ? styles.copiedLabelVisible : ''}`}>
-              Copied
-            </span>
-          </button>
-          {getMarkdown && (
-            <button
-              className={`${styles.copyBtn} ${copied ? styles.copyBtnDone : ''}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                const md = getMarkdown();
-                if (md) {
-                  navigator.clipboard.writeText(md).then(() => {
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1200);
-                  });
-                }
-              }}
-              title={copied ? 'Copied!' : 'Copy markdown'}
-            >
-              {copied ? (
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <path d="M3 8.5l3.5 3.5 6.5-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              ) : (
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
-                  <path d="M10.5 5.5V3.5a1.5 1.5 0 00-1.5-1.5H3.5A1.5 1.5 0 002 3.5V9a1.5 1.5 0 001.5 1.5h2" stroke="currentColor" strokeWidth="1.5" />
-                </svg>
-              )}
-            </button>
-          )}
+          <span className={styles.projectTitle}>
+            {projectTitle || 'New Project'}
+          </span>
         </span>
       </div>
 

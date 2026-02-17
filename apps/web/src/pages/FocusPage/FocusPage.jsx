@@ -5,7 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import { Markdown } from '@tiptap/markdown';
-import { fetchWritingProject, saveProjectPages, saveProjectHighlights } from '@hermes/api';
+import { fetchWritingProject, saveProjectPages, saveProjectHighlights, updateWritingProject, updatePublishSettings, generateSlug } from '@hermes/api';
 import useAuth from '../../hooks/useAuth';
 import useFocusMode from './useFocusMode';
 import useHighlights, { getDocFlatText, flatOffsetToPos } from './useHighlights';
@@ -47,6 +47,8 @@ export default function FocusPage() {
   const [postCopied, setPostCopied] = useState(false);
   const actionsRef = useRef(null);
   const [wordCount, setWordCount] = useState(0);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleEditValue, setTitleEditValue] = useState('');
   const [activeTab, setActiveTab] = useState('coral');
   const [pages, setPages] = useState({ ...EMPTY_PAGES });
   const [initialLoaded, setInitialLoaded] = useState(false);
@@ -354,14 +356,43 @@ export default function FocusPage() {
     clearHighlight();
   }, [editor, activeTab, storageKey, isLoggedIn, projectId, clearHighlight]);
 
-  const handleCopy = useCallback(() => {
-    if (!editor) return;
-    return editor.getMarkdown();
-  }, [editor]);
-
   const handlePublishChange = useCallback((updates) => {
     setPublishState((prev) => ({ ...prev, ...updates }));
   }, []);
+
+  // Inline title editing
+  const startEditingTitle = useCallback(() => {
+    setTitleEditValue(projectTitle);
+    setEditingTitle(true);
+  }, [projectTitle]);
+
+  const commitTitle = useCallback(async (value) => {
+    const trimmed = value.trim();
+    setEditingTitle(false);
+    if (!trimmed || trimmed === projectTitle) return;
+
+    setProjectTitle(trimmed);
+    try {
+      await updateWritingProject(projectId, { title: trimmed });
+      if (publishState.published) {
+        const slug = generateSlug(trimmed);
+        await updatePublishSettings(projectId, { slug });
+        handlePublishChange({ slug });
+      }
+    } catch {
+      // Revert on failure
+      setProjectTitle(projectTitle);
+    }
+  }, [projectId, projectTitle, publishState.published, handlePublishChange]);
+
+  const handleTitleKeyDown = useCallback((e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commitTitle(titleEditValue); }
+    if (e.key === 'Escape') { e.preventDefault(); setEditingTitle(false); }
+  }, [commitTitle, titleEditValue]);
+
+  const handleTitleBlur = useCallback(() => {
+    commitTitle(titleEditValue);
+  }, [commitTitle, titleEditValue]);
 
   // Stable callback for child components to read pages on-demand (avoids re-renders on every keystroke)
   const getPages = useCallback(() => pagesRef.current, []);
@@ -456,7 +487,6 @@ export default function FocusPage() {
               onProjectRenamed={(id, newTitle) => {
                 if (id === projectId) setProjectTitle(newTitle);
               }}
-              getMarkdown={handleCopy}
             />
           ) : (
             <span className={styles.brandLabel}>{projectTitle || 'Hermes'}</span>
@@ -606,6 +636,25 @@ export default function FocusPage() {
 
       {/* Scroll area — only this region scrolls */}
       <div className={styles.scrollArea}>
+        {/* Editable project title */}
+        <div className={styles.pageTitle}>
+          {isLoggedIn && projectId && editingTitle ? (
+            <input
+              className={styles.pageTitleInput}
+              value={titleEditValue}
+              onChange={(e) => setTitleEditValue(e.target.value)}
+              onKeyDown={handleTitleKeyDown}
+              onBlur={handleTitleBlur}
+              autoFocus
+            />
+          ) : isLoggedIn && projectId ? (
+            <button className={styles.pageTitleText} onClick={startEditingTitle}>
+              {projectTitle || 'Untitled'}
+            </button>
+          ) : (
+            <span className={styles.pageTitleText}>{projectTitle || 'Untitled'}</span>
+          )}
+        </div>
         {/* Page tabs — scroll with content */}
         <div className={styles.tabsArea}>
           <PageTabs activeTab={activeTab} onTabChange={handleTabChange} pages={pages} />

@@ -75,61 +75,6 @@
   white-space: nowrap;
 }
 
-/* Invisible button wrapper — no visual styling, just makes title tappable on mobile */
-.titleCopyBtn {
-  display: contents;
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  cursor: default;
-  font: inherit;
-  color: inherit;
-}
-
-/* "Copied" label — hidden by default, positioned over title */
-.copiedLabel {
-  position: absolute;
-  color: #999;
-  font-size: 13px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  opacity: 0;
-  transition: opacity 200ms ease;
-  pointer-events: none;
-}
-
-.copiedLabelVisible {
-  opacity: 1;
-}
-
-.projectTitleHidden {
-  opacity: 0;
-}
-
-.copyBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  padding: 2px;
-  color: #bbb;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 150ms ease, color 150ms ease;
-  flex-shrink: 0;
-  line-height: 0;
-}
-
-.titleWrap:hover .copyBtn,
-.copyBtnDone {
-  opacity: 1;
-}
-
-.copyBtn:hover {
-  color: #1a1a1a;
-}
-
 /* Dropdown menu */
 .menu {
   position: absolute;
@@ -379,19 +324,5 @@
 @media (max-width: 640px) {
   .projectTitle {
     max-width: 120px;
-    transition: opacity 200ms ease;
-  }
-
-  /* Hide the separate copy icon on mobile */
-  .copyBtn {
-    display: none;
-  }
-
-  /* Make the title button tappable on mobile */
-  .titleCopyBtn {
-    display: inline-flex;
-    align-items: center;
-    position: relative;
-    cursor: pointer;
   }
 }
