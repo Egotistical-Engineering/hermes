@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import styles from './App.module.css';
 import useAuth from './hooks/useAuth';
+import EnvironmentBanner from './components/EnvironmentBanner/EnvironmentBanner';
 
 const FocusPage = lazy(() => import('./pages/FocusPage/FocusPage'));
 const ReadPage = lazy(() => import('./pages/ReadPage/ReadPage'));
@@ -73,6 +74,7 @@ function RedirectToLatestProject() {
 export default function App() {
   return (
     <div className={styles.app}>
+      <EnvironmentBanner />
       <Suspense fallback={<main />}>
         <Routes>
           <Route path="/" element={<RedirectToLatestProject />} />
