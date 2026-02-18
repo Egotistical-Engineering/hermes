@@ -1,6 +1,6 @@
 import { getSupabase } from './supabase';
 import { getPlatform } from './config';
-import { ESSAY_TITLE, ESSAY_SUBTITLE, ESSAY_MARKDOWN, ESSAY_OUTLINE } from './essay-seed';
+import { ESSAY_TITLE, ESSAY_SUBTITLE, ESSAY_PAGES } from './essay-seed';
 import { WELCOME_TITLE, WELCOME_PAGES } from './welcome-seed';
 
 // --- In-memory cache ---
@@ -230,27 +230,13 @@ export async function deleteWritingProject(projectId: string): Promise<void> {
 }
 
 export async function seedEssayProject(userId: string): Promise<WritingProject> {
-  const sb = getSupabase();
-
-  const { data: project, error: projErr } = await sb
+  const { data: project, error: projErr } = await getSupabase()
     .from('projects')
-    .insert({ title: ESSAY_TITLE, subtitle: ESSAY_SUBTITLE, user_id: userId, status: 'complete', content: ESSAY_MARKDOWN })
+    .insert({ title: ESSAY_TITLE, subtitle: ESSAY_SUBTITLE, user_id: userId, status: 'complete', pages: ESSAY_PAGES })
     .select('*')
     .single<WritingProjectRow>();
 
   if (projErr) throw projErr;
-
-  const { error: intErr } = await sb
-    .from('interviews')
-    .insert({ project_id: project.id, messages: [], outline: ESSAY_OUTLINE });
-
-  if (intErr) throw intErr;
-
-  const { error: draftErr } = await sb
-    .from('drafts')
-    .insert({ project_id: project.id, rewrite: ESSAY_MARKDOWN, version: 1 });
-
-  if (draftErr) throw draftErr;
 
   projectListCache = null;
   return toWritingProject(project);
