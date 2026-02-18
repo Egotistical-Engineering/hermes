@@ -6,9 +6,23 @@ import logger from '../lib/logger.js';
 
 const router = Router();
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY)
+  : null;
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+
+// Guard middleware: reject requests when Stripe is not configured
+function requireStripe(_req: Request, res: Response, next: () => void) {
+  if (!stripe) {
+    logger.warn('Stripe request rejected — STRIPE_SECRET_KEY not configured');
+    res.status(503).json({ error: 'Billing is not configured' });
+    return;
+  }
+  next();
+}
+
+router.use(requireStripe);
 
 // --- Helpers ---
 
@@ -53,7 +67,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    event = stripe!.webhooks.constructEvent(req.body, sig, webhookSecret);
   } catch (err: any) {
     logger.warn({ error: err?.message }, 'Stripe webhook signature verification failed');
     res.status(400).json({ error: 'Webhook signature verification failed' });
@@ -93,7 +107,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
           break;
         }
 
-        const sub = await stripe.subscriptions.retrieve(subscriptionId);
+        const sub = await stripe!.subscriptions.retrieve(subscriptionId);
 
         await supabase
           .from('user_profiles')
@@ -179,7 +193,7 @@ router.post('/webhook', async (req: Request, res: Response) => {
         const userId = await findUserByStripeCustomer(customerId);
         if (!userId) break;
 
-        const sub = await stripe.subscriptions.retrieve(subscriptionId);
+        const sub = await stripe!.subscriptions.retrieve(subscriptionId);
 
         await supabase
           .from('user_profiles')
@@ -237,7 +251,7 @@ router.post('/portal', requireAuth, async (req: Request, res: Response) => {
   }
 
   try {
-    const portalSession = await stripe.billingPortal.sessions.create({
+    const portalSession = await stripe!.billingPortal.sessions.create({
       customer: profile.stripe_customer_id,
       return_url: `${process.env.FRONTEND_URL || 'http://localhost:5176'}`,
     });
