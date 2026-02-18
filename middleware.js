@@ -68,8 +68,8 @@ export default async function middleware(request) {
   const shortId = parts[1];
   if (!shortId) return;
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) return;
 
