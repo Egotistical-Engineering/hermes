@@ -29,6 +29,9 @@ export { validateInviteCode, signupWithInvite, consumeInviteCode } from './auth'
 export { fetchCurrentUsage, getProUpgradeUrl, createPortalSession } from './billing';
 export type { UsageInfo } from './billing';
 
+export { fetchMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, testMcpServer } from './mcpServers';
+export type { McpServer } from './mcpServers';
+
 export { WELCOME_PAGES, WELCOME_HIGHLIGHTS } from './welcome-seed';
 
 export type {

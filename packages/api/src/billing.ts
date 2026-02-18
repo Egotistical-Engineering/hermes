@@ -9,6 +9,7 @@ export interface UsageInfo {
   subscriptionStatus: string;
   cancelAtPeriodEnd: boolean;
   currentPeriodEnd: string | null;
+  hasMcpAccess: boolean;
 }
 
 function normalizeBaseUrl(url: string): string {

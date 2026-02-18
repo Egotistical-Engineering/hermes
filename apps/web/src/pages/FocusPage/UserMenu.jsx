@@ -4,6 +4,7 @@ import { createPortalSession } from '@hermes/api';
 import { supabase } from '../../lib/supabase';
 import useAuth from '../../hooks/useAuth';
 import useUsage from '../../hooks/useUsage';
+import McpSettingsView from './McpSettingsView';
 import styles from './UserMenu.module.css';
 
 export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
@@ -16,7 +17,7 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
   const forgotEmailRef = useRef(null);
 
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState('menu'); // 'menu' | 'password' | 'billing' | 'login' | 'signup' | 'signupDone' | 'forgotPassword' | 'forgotPasswordDone'
+  const [view, setView] = useState('menu'); // 'menu' | 'password' | 'billing' | 'mcp' | 'login' | 'signup' | 'signupDone' | 'forgotPassword' | 'forgotPasswordDone'
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
@@ -73,7 +74,7 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
     if (!open) return;
     const handleKey = (e) => {
       if (e.key === 'Escape') {
-        if (view === 'password' || view === 'billing' || view === 'login' || view === 'signup' || view === 'signupDone' || view === 'forgotPassword' || view === 'forgotPasswordDone') {
+        if (view === 'password' || view === 'billing' || view === 'mcp' || view === 'login' || view === 'signup' || view === 'signupDone' || view === 'forgotPassword' || view === 'forgotPasswordDone') {
           setView('menu');
           setError('');
         } else {
@@ -257,6 +258,8 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
                   </button>
                 </div>
               </form>
+            ) : view === 'mcp' ? (
+              <McpSettingsView session={session} onBack={() => setView('menu')} />
             ) : view === 'billing' ? (
               <div className={styles.billingView}>
                 <div className={styles.billingTitle}>Billing</div>
@@ -327,6 +330,14 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
                   >
                     Billing
                   </button>
+                  {usage?.hasMcpAccess && (
+                    <button
+                      className={styles.menuItem}
+                      onClick={() => setView('mcp')}
+                    >
+                      MCP Servers <span className={styles.betaBadge}>beta</span>
+                    </button>
+                  )}
                   <button
                     className={`${styles.menuItem} ${styles.menuItemDanger}`}
                     onClick={handleSignOut}

@@ -7,6 +7,10 @@ const router = Router();
 const FREE_DAILY_LIMIT = 10;
 const PRO_MONTHLY_LIMIT = 300;
 
+const ADMIN_USER_IDS = new Set(
+  (process.env.ADMIN_USER_IDS || '').split(',').map(id => id.trim()).filter(Boolean),
+);
+
 router.get('/current', requireAuth, async (req: Request, res: Response) => {
   const userId = req.user!.id;
 
@@ -26,6 +30,7 @@ router.get('/current', requireAuth, async (req: Request, res: Response) => {
       subscriptionStatus: 'none',
       cancelAtPeriodEnd: false,
       currentPeriodEnd: null,
+      hasMcpAccess: ADMIN_USER_IDS.has(userId),
     });
     return;
   }
@@ -59,6 +64,8 @@ router.get('/current', requireAuth, async (req: Request, res: Response) => {
     resetInfo = 'Resets daily at midnight UTC';
   }
 
+  const isAdmin = ADMIN_USER_IDS.has(userId);
+
   res.json({
     plan: profile.plan,
     used,
@@ -68,6 +75,7 @@ router.get('/current', requireAuth, async (req: Request, res: Response) => {
     subscriptionStatus: profile.subscription_status,
     cancelAtPeriodEnd: profile.cancel_at_period_end,
     currentPeriodEnd: profile.current_period_end,
+    hasMcpAccess: isPro || isAdmin,
   });
 });
 

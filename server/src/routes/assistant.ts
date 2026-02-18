@@ -6,6 +6,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { checkMessageLimit } from '../middleware/usageGate.js';
 import logger from '../lib/logger.js';
 import { mcpManager } from '../lib/mcp.js';
+import type { UserMcpServerConfig } from '../lib/mcp.js';
 
 const router = Router();
 
@@ -231,7 +232,26 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
   const hasMcpAccess = isPro || isAdmin;
 
   const tools: Anthropic.Messages.Tool[] = [HIGHLIGHT_TOOL, CITE_SOURCE_TOOL];
-  if (hasMcpAccess) tools.push(...mcpManager.getTools());
+  if (hasMcpAccess) {
+    tools.push(...mcpManager.getTools());
+    // Load user's configured MCP servers
+    const { data: userServers } = await supabase
+      .from('user_mcp_servers')
+      .select('id, name, url, headers, enabled')
+      .eq('user_id', userId)
+      .eq('enabled', true);
+    if (userServers?.length) {
+      const configs: UserMcpServerConfig[] = userServers.map((s) => ({
+        id: s.id,
+        name: s.name,
+        url: s.url,
+        headers: (s.headers as Record<string, string>) || {},
+        enabled: s.enabled,
+      }));
+      const userTools = await mcpManager.getUserTools(userId, configs);
+      tools.push(...userTools);
+    }
+  }
 
   // Build system context
   let systemContent = hasMcpAccess
@@ -364,7 +384,7 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
               } catch {
                 logger.warn({ projectId }, 'Failed to parse cite_source tool input');
               }
-            } else if (mcpManager.isMcpTool(currentToolName)) {
+            } else if (mcpManager.isMcpToolForUser(currentToolName, userId)) {
               // Notify frontend that an MCP tool is being invoked
               const server = mcpManager.serverName(currentToolName);
               res.write(`event: tool_status\ndata: ${JSON.stringify({ tool: currentToolName, server, status: 'running' })}\n\n`);
@@ -417,10 +437,11 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
               };
             }
 
-            // MCP tool
-            const result = await mcpManager.callTool(
+            // MCP tool (system or user)
+            const result = await mcpManager.callToolForUser(
               block.name,
               block.input as Record<string, unknown>,
+              userId,
             );
             const server = mcpManager.serverName(block.name);
             const status = result.isError ? 'error' : 'done';

@@ -73,17 +73,7 @@ server/src/
   middleware/auth.ts        # JWT verification
 ```
 
-## Writing Workflow System
-
-Six-stage pipeline where the AI structures thinking but never does the final writing.
-
-### Status machine
-
-`interview` → `draft` → `rewriting` → `feedback` → `complete`
-
-Transitions are explicit via `POST /api/writing/status`. Each stage is persisted in `projects.status`.
-
-### API endpoints
+## API endpoints
 
 **Implemented** (`server/src/routes/assistant.ts`):
 
@@ -101,36 +91,15 @@ Transitions are explicit via `POST /api/writing/status`. Each stage is persisted
 - `POST /api/stripe/portal` — create Stripe Customer Portal session (auth required)
 - `GET /api/usage/current` — current user's message usage and plan info (auth required)
 
-**Planned** (to be built in `server/src/routes/writing.ts`):
-
-- `POST /api/writing/status` — advance project status (`{ projectId, status }`)
-- `POST /api/writing/interview/stream` — streaming interview chat (SSE)
-- `POST /api/writing/interview/outline` — generate structured outline from interview
-- `POST /api/writing/draft/stream` — generate skeleton draft from brain dump + outline + prior context (SSE)
-- `POST /api/writing/feedback/stream` — generate feedback on rewrite without rewriting for the user (SSE)
-- `POST /api/writing/tools/:tool` — inline coaching tools: `expand`, `challenge`, `restructure` (SSE, accepts selected text)
-
 ### Database tables
 
 All tables linked by `project_id`, owner-scoped via RLS:
 
 - `projects` — `id`, `user_id`, `title`, `status`, `content`, `highlights` (JSONB), timestamps
-- `brain_dumps` — `id`, `project_id`, `content` (raw text), `prior_essays` (JSONB)
-- `interviews` — `id`, `project_id`, `messages` (JSONB array), `outline` (generated text)
-- `drafts` — `id`, `project_id`, `version`, `skeleton` (AI-generated), `rewrite` (user's text)
-- `feedback` — `id`, `project_id`, `draft_id`, `content` (AI critique)
 - `assistant_conversations` — `project_id` (unique), `messages` (JSONB), timestamps
 - `user_profiles` — `id` (PK → auth.users), `plan`, `stripe_customer_id`, `stripe_subscription_id`, `subscription_status`, `billing_cycle_anchor`, `cancel_at_period_end`, `current_period_end`, timestamps
 - `message_usage` — `id`, `user_id`, `project_id`, `created_at` (tracks per-message usage for limits)
 - `processed_stripe_events` — `event_id` (PK), `event_type`, `processed_at` (webhook idempotency)
-
-### Design details
-
-- All AI outputs stream via SSE (interview, draft, feedback, inline tools)
-- Draft versioning: "start new version" promotes current rewrite to next skeleton draft
-- Three inline tools during rewrite: select text → expand / challenge / restructure
-- Prior completed projects are passed as context for voice/style consistency
-- Interview uses one-question-at-a-time format to keep conversation focused
 
 ## Staging Environment
 
@@ -180,7 +149,7 @@ npm run server:dev:staging
 Production credentials are **never** stored in local env files. They are only set in Vercel and Railway dashboards.
 
 - **Region**: us-east-1
-- **Tables**: `projects`, `brain_dumps`, `interviews`, `drafts`, `feedback`, `assistant_conversations`, `invite_codes`
+- **Tables**: `projects`, `assistant_conversations`, `user_profiles`, `message_usage`, `processed_stripe_events`, `invite_codes`, `user_mcp_servers`
 - **Migrations**: `supabase/migrations/` (00001 initial, 00002 pages, 00003 publishing, 00004 invite codes, 00005 published pages + subtitle, 00006 subscriptions)
 - **RLS**: Owner-scoped — authenticated users can only read/write their own data. Published projects are publicly readable.
 

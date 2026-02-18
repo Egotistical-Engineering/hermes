@@ -8,6 +8,7 @@ import assistantRouter from './routes/assistant.js';
 import authRouter from './routes/auth.js';
 import stripeRouter from './routes/stripe.js';
 import usageRouter from './routes/usage.js';
+import mcpRouter from './routes/mcp.js';
 import logger from './lib/logger.js';
 import { mcpManager } from './lib/mcp.js';
 
@@ -60,6 +61,7 @@ app.use('/api/auth', rateLimit({ windowMs: 60_000, max: 10, standardHeaders: tru
 app.use('/api/assistant', rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false }), assistantRouter);
 app.use('/api/stripe', stripeRouter);
 app.use('/api/usage', rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false }), usageRouter);
+app.use('/api/mcp', rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false }), mcpRouter);
 
 // Sentry error handler (must be after all routes)
 Sentry.setupExpressErrorHandler(app);
