@@ -11,6 +11,7 @@ import usageRouter from './routes/usage.js';
 import mcpRouter from './routes/mcp.js';
 import logger from './lib/logger.js';
 import { mcpManager } from './lib/mcp.js';
+import { getUserFromBearerToken } from './middleware/auth.js';
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
@@ -20,7 +21,7 @@ Sentry.init({
 });
 
 // Startup checks for required env vars
-const requiredEnv = ['ANTHROPIC_API_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_KEY'];
+const requiredEnv = ['ANTHROPIC_API_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'SUPABASE_JWT_SECRET', 'SUPABASE_ANON_KEY', 'FRONTEND_URL'];
 for (const key of requiredEnv) {
   if (!process.env[key]) {
     logger.error({ key }, 'Missing required environment variable');
@@ -52,6 +53,11 @@ app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 
 app.use(express.json({ limit: '1mb' }));
 
+// Health check — before rate limiter so monitoring doesn't count
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
 // Global rate limit: 300 req / 15 min
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -60,12 +66,24 @@ app.use(rateLimit({
   legacyHeaders: false,
 }));
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok' });
+// Assistant rate limit: keyed by user ID when available, falls back to IP
+const assistantLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      const user = getUserFromBearerToken(authHeader.slice(7));
+      if (user) return `user:${user.id}`;
+    }
+    return req.ip || 'unknown';
+  },
 });
 
 app.use('/api/auth', rateLimit({ windowMs: 60_000, max: 10, standardHeaders: true, legacyHeaders: false }), authRouter);
-app.use('/api/assistant', rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false }), assistantRouter);
+app.use('/api/assistant', assistantLimiter, assistantRouter);
 app.use('/api/stripe', stripeRouter);
 app.use('/api/usage', rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false }), usageRouter);
 app.use('/api/mcp', rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false }), mcpRouter);

@@ -1,3 +1,5 @@
+import dns from 'node:dns/promises';
+
 export type ValidationError = {
   field: string;
   message: string;
@@ -14,6 +16,36 @@ const PRIVATE_IP_RANGES = [
   /^0\./,
   /^169\.254\./,
 ];
+
+const BLOCKED_HOSTNAMES = [
+  'localhost',
+  'metadata.google.internal',
+  '169.254.169.254',
+];
+
+function stripBrackets(hostname: string): string {
+  return hostname.replace(/^\[|\]$/g, '');
+}
+
+function isPrivateIp(ip: string): boolean {
+  const stripped = stripBrackets(ip);
+
+  // IPv4 private ranges
+  if (PRIVATE_IP_RANGES.some((re) => re.test(stripped))) return true;
+
+  // IPv6 loopback and private ranges
+  if (stripped === '::1') return true;
+  if (stripped.startsWith('fc00:') || stripped.startsWith('fd00:')) return true;
+  if (stripped.startsWith('fe80:')) return true;
+
+  // IPv4-mapped IPv6 (::ffff:x.x.x.x)
+  const mappedMatch = stripped.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (mappedMatch && PRIVATE_IP_RANGES.some((re) => re.test(mappedMatch[1]))) return true;
+
+  if (stripped === '::ffff:127.0.0.1') return true;
+
+  return false;
+}
 
 export function validateMcpServerConfig(input: {
   name?: unknown;
@@ -58,10 +90,10 @@ export function validateMcpServerConfig(input: {
         errors.push({ field: 'url', message: 'URL must not contain credentials' });
       }
 
-      const hostname = parsed.hostname;
-      if (hostname === 'localhost' || hostname === '[::1]') {
-        errors.push({ field: 'url', message: 'URL must not point to localhost' });
-      } else if (PRIVATE_IP_RANGES.some((re) => re.test(hostname))) {
+      const hostname = stripBrackets(parsed.hostname);
+      if (BLOCKED_HOSTNAMES.includes(hostname)) {
+        errors.push({ field: 'url', message: 'URL must not point to a blocked host' });
+      } else if (isPrivateIp(hostname)) {
         errors.push({ field: 'url', message: 'URL must not point to a private IP address' });
       }
     }
@@ -79,6 +111,43 @@ export function validateMcpServerConfig(input: {
         }
       }
     }
+  }
+
+  return errors;
+}
+
+/**
+ * Async DNS resolution check: resolves hostname and validates all IPs.
+ * Call after validateMcpServerConfig passes synchronous checks.
+ */
+export async function validateMcpServerDns(url: string): Promise<ValidationError[]> {
+  const errors: ValidationError[] = [];
+
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return [{ field: 'url', message: 'URL is not valid' }];
+  }
+
+  const hostname = stripBrackets(parsed.hostname);
+
+  // Skip DNS check for IP literals (already checked synchronously)
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname) || hostname.includes(':')) return [];
+
+  try {
+    const addresses = await dns.resolve4(hostname).catch(() => [] as string[]);
+    const addresses6 = await dns.resolve6(hostname).catch(() => [] as string[]);
+    const allAddresses = [...addresses, ...addresses6];
+
+    for (const addr of allAddresses) {
+      if (isPrivateIp(addr)) {
+        errors.push({ field: 'url', message: 'URL hostname resolves to a private IP address' });
+        break;
+      }
+    }
+  } catch {
+    // DNS resolution failed — allow (the connection will fail later anyway)
   }
 
   return errors;

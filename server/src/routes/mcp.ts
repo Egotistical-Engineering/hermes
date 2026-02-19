@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 import { mcpManager } from '../lib/mcp.js';
-import { validateMcpServerConfig, validateMcpServerUpdate } from '../lib/mcpValidation.js';
+import { validateMcpServerConfig, validateMcpServerUpdate, validateMcpServerDns } from '../lib/mcpValidation.js';
 import logger from '../lib/logger.js';
 
 import type { UserMcpServerConfig } from '../lib/mcp.js';
@@ -74,6 +74,15 @@ router.post('/servers', async (req: Request, res: Response) => {
   if (errors.length > 0) {
     res.status(400).json({ error: 'Validation failed', details: errors });
     return;
+  }
+
+  // Async DNS resolution check (SSRF protection)
+  if (typeof url === 'string') {
+    const dnsErrors = await validateMcpServerDns(url);
+    if (dnsErrors.length > 0) {
+      res.status(400).json({ error: 'Validation failed', details: dnsErrors });
+      return;
+    }
   }
 
   // Check server count limit

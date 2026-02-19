@@ -80,23 +80,21 @@ router.post('/webhook', async (req: Request, res: Response) => {
     return;
   }
 
-  // Idempotency check
-  const { data: existing } = await supabase
+  // Atomic idempotency: INSERT ... ON CONFLICT to avoid race conditions
+  const { error: insertError } = await supabase
     .from('processed_stripe_events')
-    .select('event_id')
-    .eq('event_id', event.id)
-    .single();
+    .insert({ event_id: event.id, event_type: event.type });
 
-  if (existing) {
-    res.json({ received: true, duplicate: true });
+  if (insertError) {
+    // Postgres unique violation (23505) = duplicate event
+    if (insertError.code === '23505') {
+      res.json({ received: true, duplicate: true });
+      return;
+    }
+    logger.error({ error: insertError.message, eventId: event.id }, 'Failed to record Stripe event');
+    res.status(500).json({ error: 'Failed to process webhook' });
     return;
   }
-
-  // Mark as processing
-  await supabase.from('processed_stripe_events').insert({
-    event_id: event.id,
-    event_type: event.type,
-  });
 
   try {
     switch (event.type) {
