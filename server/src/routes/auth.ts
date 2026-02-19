@@ -19,7 +19,7 @@ const ValidateInviteSchema = z.object({
 
 const SignupSchema = z.object({
   email: z.email(),
-  password: z.string().min(6),
+  password: z.string().min(8),
   inviteCode: z.string().trim().min(1),
 });
 

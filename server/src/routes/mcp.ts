@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 import { mcpManager } from '../lib/mcp.js';
 import { validateMcpServerConfig, validateMcpServerUpdate, validateMcpServerDns } from '../lib/mcpValidation.js';
+import { ADMIN_USER_IDS } from '../lib/config.js';
 import logger from '../lib/logger.js';
 
 import type { UserMcpServerConfig } from '../lib/mcp.js';
@@ -10,10 +11,6 @@ import type { UserMcpServerConfig } from '../lib/mcp.js';
 const router = Router();
 
 const MAX_SERVERS_PER_USER = 10;
-
-const ADMIN_USER_IDS = new Set(
-  (process.env.ADMIN_USER_IDS || '').split(',').map(id => id.trim()).filter(Boolean),
-);
 
 async function hasMcpAccess(userId: string): Promise<boolean> {
   if (ADMIN_USER_IDS.has(userId)) return true;
@@ -61,7 +58,16 @@ router.get('/servers', async (req: Request, res: Response) => {
     return;
   }
 
-  res.json({ servers: data || [] });
+  // Mask header values in response
+  const masked = (data || []).map((s: Record<string, unknown>) => ({
+    ...s,
+    headers: s.headers && typeof s.headers === 'object'
+      ? Object.fromEntries(
+          Object.keys(s.headers as Record<string, string>).map((k) => [k, '••••••']),
+        )
+      : {},
+  }));
+  res.json({ servers: masked });
 });
 
 // POST /servers — add a new MCP server

@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import crypto from 'node:crypto';
 import * as Sentry from '@sentry/node';
 import express from 'express';
 import cors from 'cors';
@@ -42,6 +43,14 @@ const port = parseInt(process.env.PORT || '3003', 10);
 
 // Security headers
 app.use(helmet());
+
+// Request ID: use incoming header or generate
+app.use((req, res, next) => {
+  const id = (req.headers['x-request-id'] as string) || crypto.randomUUID();
+  req.headers['x-request-id'] = id;
+  res.setHeader('x-request-id', id);
+  next();
+});
 
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5176',

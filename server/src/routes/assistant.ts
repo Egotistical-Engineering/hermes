@@ -6,20 +6,13 @@ import { requireAuth } from '../middleware/auth.js';
 import { checkMessageLimit } from '../middleware/usageGate.js';
 import logger from '../lib/logger.js';
 import { mcpManager } from '../lib/mcp.js';
+import { isAdminUser } from '../lib/config.js';
 import type { UserMcpServerConfig } from '../lib/mcp.js';
 
 const router = Router();
 
 const anthro = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL = 'claude-sonnet-4-6';
-
-const ADMIN_USER_IDS = new Set(
-  (process.env.ADMIN_USER_IDS || '').split(',').map(id => id.trim()).filter(Boolean)
-);
-
-function isAdminUser(userId: string): boolean {
-  return ADMIN_USER_IDS.has(userId);
-}
 
 type SourceData = {
   url: string;
@@ -321,11 +314,10 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
   }
 
   // Set up SSE response
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
-  });
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
 
   try {
     const anthropicMessages = allMessages.map((m) => ({

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import * as Sentry from '@sentry/react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -492,12 +493,15 @@ export default function FocusPage() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [actionsOpen]);
 
+  const postCopiedTimerRef = useRef(null);
+  useEffect(() => () => { if (postCopiedTimerRef.current) clearTimeout(postCopiedTimerRef.current); }, []);
+
   const handleCopyPost = useCallback(() => {
     if (!editor) return;
     const md = editor.getMarkdown();
     navigator.clipboard.writeText(md).then(() => {
       setPostCopied(true);
-      setTimeout(() => setPostCopied(false), 2000);
+      postCopiedTimerRef.current = setTimeout(() => setPostCopied(false), 2000);
     });
     setActionsOpen(false);
   }, [editor]);
@@ -764,13 +768,15 @@ export default function FocusPage() {
       <LinkTooltip tooltip={linkTooltip} isMac={isMac} />
 
       {/* Floating chat window */}
-      <FocusChatWindow
-        projectId={projectId}
-        getPages={getPages}
-        activeTab={activeTab}
-        onHighlights={handleHighlights}
-        session={session}
-      />
+      <Sentry.ErrorBoundary fallback={<div style={{ position: 'fixed', bottom: 24, left: 24, color: 'var(--text-muted)', fontSize: 13 }}>Chat unavailable</div>}>
+        <FocusChatWindow
+          projectId={projectId}
+          getPages={getPages}
+          activeTab={activeTab}
+          onHighlights={handleHighlights}
+          session={session}
+        />
+      </Sentry.ErrorBoundary>
 
       <SignupToast wordCount={wordCount} isLoggedIn={isLoggedIn} />
     </div>
