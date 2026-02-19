@@ -49,10 +49,8 @@ export default function AuthProvider({ children }) {
   const updatePassword = (newPassword) =>
     supabase.auth.updateUser({ password: newPassword }).then(({ error }) => { if (error) throw error; });
 
-  if (loading) return null;
-
   return (
-    <AuthContext.Provider value={{ session, authError, clearAuthError: () => setAuthError(null), signIn, signInWithGoogle, signOut, updatePassword }}>
+    <AuthContext.Provider value={{ session, loading, authError, clearAuthError: () => setAuthError(null), signIn, signInWithGoogle, signOut, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );

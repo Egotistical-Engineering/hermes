@@ -123,17 +123,34 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
 
       const collectedHighlights = [];
       const collectedSources = [];
+      let textBuffer = '';
+      let rafId = null;
+
+      function flushTextBuffer() {
+        if (!textBuffer) return;
+        const flushed = textBuffer;
+        textBuffer = '';
+        setMessages((prev) => {
+          const updated = prev.slice(0, -1);
+          const last = prev[prev.length - 1];
+          if (last.role === 'assistant') {
+            updated.push({ ...last, content: last.content + flushed });
+          } else {
+            updated.push(last);
+          }
+          return updated;
+        });
+      }
 
       await readAssistantStream(response, {
         onText(chunk) {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last.role === 'assistant') {
-              updated[updated.length - 1] = { ...last, content: last.content + chunk };
-            }
-            return updated;
-          });
+          textBuffer += chunk;
+          if (rafId === null) {
+            rafId = requestAnimationFrame(() => {
+              rafId = null;
+              flushTextBuffer();
+            });
+          }
         },
         onHighlight(highlight) {
           collectedHighlights.push(highlight);
@@ -149,6 +166,9 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
           }
         },
         onDone() {
+          if (rafId !== null) cancelAnimationFrame(rafId);
+          rafId = null;
+          flushTextBuffer();
           if (collectedHighlights.length > 0) {
             onHighlights?.(collectedHighlights);
           }
@@ -167,6 +187,8 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
           refreshUsage(true);
         },
         onError() {
+          if (rafId !== null) cancelAnimationFrame(rafId);
+          rafId = null;
           setToolStatus(null);
         },
       });

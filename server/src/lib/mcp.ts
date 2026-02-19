@@ -56,7 +56,7 @@ type UserPoolEntry = {
 };
 
 const TOOL_PREFIX = 'mcp';
-const USER_POOL_MAX = 200;
+const USER_POOL_MAX = 50;
 const USER_POOL_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const EVICTION_INTERVAL_MS = 60 * 1000; // check every minute
 
