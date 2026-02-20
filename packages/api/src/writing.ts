@@ -154,9 +154,13 @@ export async function fetchWritingProjects(): Promise<WritingProject[]> {
     return projectListCache.data;
   }
 
+  const { data: { user } } = await getSupabase().auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
   const { data, error } = await getSupabase()
     .from('projects')
     .select('*')
+    .eq('user_id', user.id)
     .order('updated_at', { ascending: false });
 
   if (error) throw error;
@@ -169,10 +173,14 @@ export async function fetchWritingProject(projectId: string): Promise<WritingPro
   const cached = getCached(projectCache, projectId);
   if (cached !== undefined) return cached;
 
+  const { data: { user } } = await getSupabase().auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
   const { data, error } = await getSupabase()
     .from('projects')
     .select('*')
     .eq('id', projectId)
+    .eq('user_id', user.id)
     .single<WritingProjectRow>();
 
   if (error) {
