@@ -82,8 +82,9 @@ server/src/
 **Auth** (`server/src/routes/auth.ts`):
 
 - `POST /api/auth/validate-invite` — check if invite code is valid (no usage increment)
-- `POST /api/auth/signup` — create user with invite code (email/password, auto-confirmed)
-- `POST /api/auth/use-invite` — consume invite code use (for Google OAuth flow)
+- `POST /api/auth/signup` — create user with invite code (email/password, auto-confirmed); stamps `trial_expires_at` if trial code
+- `POST /api/auth/use-invite` — consume invite code use (for Google OAuth flow); returns `trialDays`
+- `POST /api/auth/activate-trial` — activate trial for current user (Google OAuth flow, auth required, idempotent)
 
 **Billing** (`server/src/routes/stripe.ts` + `server/src/routes/usage.ts`):
 
@@ -97,7 +98,7 @@ All tables linked by `project_id`, owner-scoped via RLS:
 
 - `projects` — `id`, `user_id`, `title`, `status`, `content`, `highlights` (JSONB), timestamps
 - `assistant_conversations` — `project_id` (unique), `messages` (JSONB), timestamps
-- `user_profiles` — `id` (PK → auth.users), `plan`, `stripe_customer_id`, `stripe_subscription_id`, `subscription_status`, `billing_cycle_anchor`, `cancel_at_period_end`, `current_period_end`, timestamps
+- `user_profiles` — `id` (PK → auth.users), `plan`, `stripe_customer_id`, `stripe_subscription_id`, `subscription_status`, `billing_cycle_anchor`, `cancel_at_period_end`, `current_period_end`, `trial_expires_at`, timestamps
 - `message_usage` — `id`, `user_id`, `project_id`, `created_at` (tracks per-message usage for limits)
 - `processed_stripe_events` — `event_id` (PK), `event_type`, `processed_at` (webhook idempotency)
 
@@ -150,8 +151,8 @@ Production credentials are **never** stored in local env files. They are only se
 
 - **Region**: us-east-1
 - **Tables**: `projects`, `assistant_conversations`, `user_profiles`, `message_usage`, `processed_stripe_events`, `invite_codes`, `user_mcp_servers`
-- **Migrations**: `supabase/migrations/` (00001 initial, 00002 pages, 00003 publishing, 00004 invite codes, 00005 published pages + subtitle, 00006 subscriptions)
-- **RLS**: Owner-scoped — authenticated users can only read/write their own data. Published projects are publicly readable.
+- **Migrations**: `supabase/migrations/` (00001 initial, 00002 pages, 00003 publishing, 00004 invite codes, 00005 published pages + subtitle, 00006 subscriptions, 00007 user MCP servers, 00008 security hardening, 00009 audit remediation, 00010 trial codes)
+- **RLS**: Owner-scoped — authenticated users can only read/write their own data. Published projects are publicly readable via RLS, but client queries must always filter by `user_id` to avoid leaking published projects into other users' project lists.
 
 ### Data conventions
 
@@ -165,13 +166,38 @@ Email/password via Supabase Auth, gated behind invite codes. `AuthContext` provi
 
 ### Invite code signup flow
 
-Signup requires a valid invite code (max 25 uses per code). The flow:
+Signup requires a valid invite code. The flow:
 
 1. User enters invite code → validated via `POST /api/auth/validate-invite`
 2. User fills email/password → account created via `POST /api/auth/signup` (auto-confirmed)
 3. Google OAuth: invite code consumed via `POST /api/auth/use-invite` before redirect
 
 Users created with invite codes are auto-confirmed (no email verification needed). The `invite_codes` table has no RLS policies — only the server (service key) accesses it.
+
+### Trial invite codes
+
+Some invite codes grant a time-limited trial (e.g. 30 days, 100 messages/month). Trial codes have a non-null `trial_days` column in `invite_codes`. The system uses `use_invite_code_v2()` which returns `-1` (invalid), `0` (standard code), or `N > 0` (trial days).
+
+**How it works:**
+- On signup, if `trialDays > 0`, the server stamps `trial_expires_at` on `user_profiles`
+- The usage gate checks: Pro → Trial (active `trial_expires_at`) → Free, in that order
+- Trial users get `TRIAL_MONTHLY_LIMIT` (100/month). Expired trials fall through to Free (10/day)
+- No cron job — expiry is checked lazily on every request
+- Limits are defined in `server/src/lib/limits.ts`
+
+**Google OAuth path:** The frontend stores `trialDays` in `sessionStorage` after consuming the invite code, then `AuthContext` calls `POST /api/auth/activate-trial` after the OAuth redirect completes (idempotent).
+
+**Trial codes are NOT seeded in migrations** — this is an open-source repo. Insert them manually via the Supabase SQL editor:
+```sql
+INSERT INTO public.invite_codes (code, max_uses, trial_days)
+  VALUES ('your-code', 50, 30);
+```
+
+**Edge cases:**
+- Pro subscription takes priority over active trial (`isPro` checked first)
+- Expired trial = Free tier. `trial_expires_at` stays as audit trail
+- `activate-trial` is idempotent — skips if `trial_expires_at` already set
+- Trial users do NOT get MCP access (`hasMcpAccess = isPro || isAdmin`)
 
 ### Server env vars
 
@@ -266,6 +292,7 @@ Add the route to `apps/web/src/App.jsx`. Wrap in `RequireAuth` if auth is requir
 - Dev server is port **5176** (not 5173)
 - Local dev and staging both use **hermes-staging** Supabase — not production
 - Invite-code signups are **auto-confirmed** via `admin.createUser()` — no email verification needed
+- **Client-side Supabase queries on `projects` must always filter by `user_id`** — the "Anyone can read published projects" RLS policy will leak other users' published projects into query results if you don't
 - Toast notifications use theme tokens for consistent appearance
 - Test dev credentials (email/password) are in `server/.env`
 
