@@ -10,6 +10,8 @@ declare global {
         subscriptionStatus: string;
         cancelAtPeriodEnd: boolean;
         currentPeriodEnd: string | null;
+        isTrial: boolean;
+        trialExpiresAt: string | null;
       };
     }
   }

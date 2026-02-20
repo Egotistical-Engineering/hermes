@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod/v4';
 import rateLimit from 'express-rate-limit';
 import { supabase } from '../lib/supabase.js';
+import { requireAuth } from '../middleware/auth.js';
 import logger from '../lib/logger.js';
 
 const router = Router();
@@ -25,6 +26,10 @@ const SignupSchema = z.object({
 
 const UseInviteSchema = z.object({
   inviteCode: z.string().trim().min(1),
+});
+
+const ActivateTrialSchema = z.object({
+  trialDays: z.number().int().min(1).max(365),
 });
 
 // POST /api/auth/validate-invite
@@ -66,18 +71,20 @@ router.post('/signup', async (req: Request, res: Response) => {
 
   const { email, password, inviteCode } = parsed.data;
 
-  // Atomically consume an invite code use
-  const { data: codeValid, error: rpcError } = await supabase.rpc('use_invite_code', {
+  // Atomically consume an invite code use (v2 returns trial info)
+  const { data: trialResult, error: rpcError } = await supabase.rpc('use_invite_code_v2', {
     code_input: inviteCode,
   });
 
-  if (rpcError || !codeValid) {
+  if (rpcError || trialResult === -1) {
     res.status(403).json({ error: 'Invalid or expired invite code' });
     return;
   }
 
+  const trialDays = trialResult as number; // 0 = standard, >0 = trial days
+
   // Create user (auto-confirmed)
-  const { error: createError } = await supabase.auth.admin.createUser({
+  const { data: createData, error: createError } = await supabase.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
@@ -99,7 +106,20 @@ router.post('/signup', async (req: Request, res: Response) => {
     return;
   }
 
-  logger.info({ email }, 'User created via invite code');
+  // If trial code, stamp trial_expires_at on the new user's profile
+  if (trialDays > 0 && createData.user) {
+    const expiresAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({ trial_expires_at: expiresAt })
+      .eq('id', createData.user.id);
+
+    if (updateError) {
+      logger.error({ userId: createData.user.id, error: updateError.message }, 'Failed to set trial_expires_at');
+    }
+  }
+
+  logger.info({ email, trialDays }, 'User created via invite code');
   res.json({ success: true });
 });
 
@@ -114,15 +134,56 @@ router.post('/use-invite', useInviteLimit, async (req: Request, res: Response) =
 
   const { inviteCode } = parsed.data;
 
-  const { data: codeValid, error: rpcError } = await supabase.rpc('use_invite_code', {
+  const { data: trialResult, error: rpcError } = await supabase.rpc('use_invite_code_v2', {
     code_input: inviteCode,
   });
 
-  if (rpcError || !codeValid) {
+  if (rpcError || trialResult === -1) {
     res.status(403).json({ error: 'Invalid or expired invite code' });
     return;
   }
 
+  const trialDays = trialResult as number;
+  res.json({ success: true, trialDays });
+});
+
+// POST /api/auth/activate-trial
+// Activate trial for the current user (Google OAuth flow — called after redirect)
+router.post('/activate-trial', requireAuth, async (req: Request, res: Response) => {
+  const parsed = ActivateTrialSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request' });
+    return;
+  }
+
+  const userId = req.user!.id;
+  const { trialDays } = parsed.data;
+
+  // Idempotent: skip if trial_expires_at is already set
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('trial_expires_at')
+    .eq('id', userId)
+    .single();
+
+  if (profile?.trial_expires_at) {
+    res.json({ success: true, alreadyActive: true });
+    return;
+  }
+
+  const expiresAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
+  const { error } = await supabase
+    .from('user_profiles')
+    .update({ trial_expires_at: expiresAt })
+    .eq('id', userId);
+
+  if (error) {
+    logger.error({ userId, error: error.message }, 'Failed to activate trial');
+    res.status(500).json({ error: 'Failed to activate trial' });
+    return;
+  }
+
+  logger.info({ userId, trialDays }, 'Trial activated');
   res.json({ success: true });
 });
 

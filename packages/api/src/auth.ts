@@ -40,7 +40,7 @@ export async function signupWithInvite(
   return res.json();
 }
 
-export async function consumeInviteCode(inviteCode: string): Promise<{ success: boolean }> {
+export async function consumeInviteCode(inviteCode: string): Promise<{ success: boolean; trialDays?: number }> {
   const baseUrl = normalizeBaseUrl(getPlatform().serverBaseUrl);
   const res = await fetch(`${baseUrl}/api/auth/use-invite`, {
     method: 'POST',
@@ -51,6 +51,25 @@ export async function consumeInviteCode(inviteCode: string): Promise<{ success: 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || 'Invalid invite code');
+  }
+
+  return res.json();
+}
+
+export async function activateTrial(trialDays: number, accessToken: string): Promise<{ success: boolean }> {
+  const baseUrl = normalizeBaseUrl(getPlatform().serverBaseUrl);
+  const res = await fetch(`${baseUrl}/api/auth/activate-trial`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ trialDays }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || 'Failed to activate trial');
   }
 
   return res.json();

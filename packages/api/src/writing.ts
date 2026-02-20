@@ -352,6 +352,7 @@ export async function startAssistantStream(
       err.plan = body.plan;
       err.used = body.used;
       err.limit = body.limit;
+      err.isTrial = body.isTrial;
       err.serverMessage = body.message;
     } catch {
       // Response wasn't JSON

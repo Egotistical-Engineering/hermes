@@ -201,7 +201,9 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
         // Rate limited — show inline upgrade message
         const limitMsg = err.plan === 'pro'
           ? `You've reached your monthly limit of ${err.limit} messages. Your limit resets soon — thank you for supporting Hermes.`
-          : `You've reached your daily limit of ${err.limit} messages.\n\nBecome a Patron ($15/mo) to get 300 messages per month and support Hermes development. [Learn more](/upgrade)`;
+          : err.isTrial
+            ? `You've used all ${err.limit} trial messages for this month.\n\nBecome a Patron ($15/mo) to get 300 messages per month. [Learn more](/upgrade)`
+            : `You've reached your daily limit of ${err.limit} messages.\n\nBecome a Patron ($15/mo) to get 300 messages per month and support Hermes development. [Learn more](/upgrade)`;
 
         setMessages((prev) => {
           const updated = [...prev];

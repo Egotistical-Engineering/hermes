@@ -1,9 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../lib/supabase.js';
 import logger from '../lib/logger.js';
-
-const FREE_DAILY_LIMIT = 10;
-const PRO_MONTHLY_LIMIT = 300;
+import { FREE_DAILY_LIMIT, PRO_MONTHLY_LIMIT, TRIAL_MONTHLY_LIMIT } from '../lib/limits.js';
 
 export async function checkMessageLimit(req: Request, res: Response, next: NextFunction) {
   const userId = req.user!.id;
@@ -12,7 +10,7 @@ export async function checkMessageLimit(req: Request, res: Response, next: NextF
     // Fetch user profile
     let { data: profile } = await supabase
       .from('user_profiles')
-      .select('plan, subscription_status, billing_cycle_anchor, cancel_at_period_end, current_period_end')
+      .select('plan, subscription_status, billing_cycle_anchor, cancel_at_period_end, current_period_end, trial_expires_at')
       .eq('id', userId)
       .single();
 
@@ -25,11 +23,15 @@ export async function checkMessageLimit(req: Request, res: Response, next: NextF
         billing_cycle_anchor: null,
         cancel_at_period_end: false,
         current_period_end: null,
+        trial_expires_at: null,
       };
     }
 
     const isPro = profile.plan === 'pro' &&
       ['active', 'trialing', 'past_due'].includes(profile.subscription_status);
+
+    const trialExpiresAt = profile.trial_expires_at;
+    const isActiveTrial = !isPro && trialExpiresAt != null && new Date(trialExpiresAt) > new Date();
 
     let used: number;
     let limit: number;
@@ -46,8 +48,17 @@ export async function checkMessageLimit(req: Request, res: Response, next: NextF
       });
       used = data ?? 0;
       limit = PRO_MONTHLY_LIMIT;
+    } else if (isActiveTrial) {
+      // Trial: count messages since trial start (trial_expires_at - 30 days)
+      const trialStart = new Date(new Date(trialExpiresAt!).getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { data } = await supabase.rpc('count_period_messages', {
+        p_user_id: userId,
+        p_period_start: trialStart,
+      });
+      used = data ?? 0;
+      limit = TRIAL_MONTHLY_LIMIT;
     } else {
-      // Free: count messages today (UTC)
+      // Free (or expired trial): count messages today (UTC)
       const today = new Date().toISOString().split('T')[0];
       const { data } = await supabase.rpc('count_daily_messages', {
         p_user_id: userId,
@@ -58,16 +69,25 @@ export async function checkMessageLimit(req: Request, res: Response, next: NextF
     }
 
     if (used >= limit) {
-      const code = isPro ? 'MONTHLY_LIMIT_EXCEEDED' : 'DAILY_LIMIT_EXCEEDED';
+      const code = isPro
+        ? 'MONTHLY_LIMIT_EXCEEDED'
+        : isActiveTrial
+          ? 'TRIAL_LIMIT_EXCEEDED'
+          : 'DAILY_LIMIT_EXCEEDED';
+
       res.status(429).json({
         error: 'Message limit reached',
         code,
         message: isPro
           ? `You've used all ${limit} messages for this billing period.`
-          : `You've used all ${limit} messages for today. Upgrade to Pro for 300/month.`,
+          : isActiveTrial
+            ? `You've used all ${limit} trial messages for this month.`
+            : `You've used all ${limit} messages for today. Upgrade to Pro for 300/month.`,
         plan: profile.plan,
         used,
         limit,
+        isTrial: isActiveTrial,
+        trialExpiresAt: trialExpiresAt ?? null,
       });
       return;
     }
@@ -81,6 +101,8 @@ export async function checkMessageLimit(req: Request, res: Response, next: NextF
       subscriptionStatus: profile.subscription_status,
       cancelAtPeriodEnd: profile.cancel_at_period_end,
       currentPeriodEnd: profile.current_period_end,
+      isTrial: isActiveTrial,
+      trialExpiresAt: trialExpiresAt ?? null,
     };
 
     next();

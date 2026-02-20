@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect } from 'react';
+import { activateTrial } from '@hermes/api';
 import { supabase } from '../lib/supabase';
 
 export const AuthContext = createContext(null);
@@ -34,6 +35,20 @@ export default function AuthProvider({ children }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Activate pending trial after Google OAuth redirect
+  useEffect(() => {
+    if (!session?.access_token) return;
+    const pending = sessionStorage.getItem('pendingTrialDays');
+    if (!pending) return;
+    sessionStorage.removeItem('pendingTrialDays');
+    const days = parseInt(pending, 10);
+    if (days > 0) {
+      activateTrial(days, session.access_token).catch(() => {
+        // Non-fatal — trial activation is best-effort
+      });
+    }
+  }, [session?.access_token]);
 
   const signIn = (email, password) =>
     supabase.auth.signInWithPassword({ email, password });

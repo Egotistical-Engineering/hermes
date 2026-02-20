@@ -264,7 +264,12 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
               <div className={styles.billingView}>
                 <div className={styles.billingTitle}>Billing</div>
                 <div className={styles.billingPlan}>
-                  {usage?.plan === 'pro' ? 'Patron' : 'Free'} plan
+                  {usage?.plan === 'pro' ? 'Patron' : usage?.isTrial ? 'Trial' : 'Free'} plan
+                  {usage?.isTrial && usage?.trialExpiresAt && (
+                    <span className={styles.billingCancelNote}>
+                      {' '}({Math.max(0, Math.ceil((new Date(usage.trialExpiresAt) - Date.now()) / (1000 * 60 * 60 * 24)))} days remaining)
+                    </span>
+                  )}
                   {usage?.cancelAtPeriodEnd && usage?.currentPeriodEnd && (
                     <span className={styles.billingCancelNote}>
                       {' '}(cancels {new Date(usage.currentPeriodEnd).toLocaleDateString()})
@@ -287,6 +292,19 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
                     >
                       Manage subscription
                     </button>
+                  </>
+                ) : usage?.isTrial ? (
+                  <>
+                    <div className={styles.billingThankYou}>
+                      After your trial, you'll have 10 messages/day on the Free plan.
+                    </div>
+                    <Link
+                      className={styles.billingActionBtn}
+                      to="/upgrade"
+                      onClick={closeDropdown}
+                    >
+                      Become a Patron — $15/mo
+                    </Link>
                   </>
                 ) : (
                   <>

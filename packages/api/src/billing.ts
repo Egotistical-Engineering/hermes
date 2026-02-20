@@ -10,6 +10,8 @@ export interface UsageInfo {
   cancelAtPeriodEnd: boolean;
   currentPeriodEnd: string | null;
   hasMcpAccess: boolean;
+  isTrial: boolean;
+  trialExpiresAt: string | null;
 }
 
 function normalizeBaseUrl(url: string): string {

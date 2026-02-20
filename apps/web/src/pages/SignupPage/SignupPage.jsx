@@ -53,7 +53,10 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      await consumeInviteCode(inviteCode);
+      const result = await consumeInviteCode(inviteCode);
+      if (result.trialDays > 0) {
+        sessionStorage.setItem('pendingTrialDays', String(result.trialDays));
+      }
       signInWithGoogle();
     } catch (err) {
       setError(err.message || 'Invalid or expired invite code');
