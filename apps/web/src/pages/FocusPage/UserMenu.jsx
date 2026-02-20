@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import posthog from 'posthog-js';
 import { createPortalSession } from '@hermes/api';
 import { supabase } from '../../lib/supabase';
 import useAuth from '../../hooks/useAuth';
@@ -301,7 +302,7 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
                     <Link
                       className={styles.billingActionBtn}
                       to="/upgrade"
-                      onClick={closeDropdown}
+                      onClick={() => { posthog.capture('upgrade_clicked', { source: 'billing_menu' }); closeDropdown(); }}
                     >
                       Become a Patron — $15/mo
                     </Link>
@@ -316,7 +317,7 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
                     <Link
                       className={styles.billingActionBtn}
                       to="/upgrade"
-                      onClick={closeDropdown}
+                      onClick={() => { posthog.capture('upgrade_clicked', { source: 'billing_menu' }); closeDropdown(); }}
                     >
                       Become a Patron — $15/mo
                     </Link>

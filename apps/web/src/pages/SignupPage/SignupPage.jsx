@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
+import posthog from 'posthog-js';
 import { validateInviteCode, signupWithInvite, consumeInviteCode } from '@hermes/api';
 import useAuth from '../../hooks/useAuth';
 import styles from './SignupPage.module.css';
@@ -39,6 +40,7 @@ export default function SignupPage() {
 
     try {
       await signupWithInvite(email, password, inviteCode);
+      posthog.capture('signup_completed', { method: 'email' });
       setStep('done');
     } catch (err) {
       setError(err.message || 'Failed to create account');
@@ -54,6 +56,7 @@ export default function SignupPage() {
 
     try {
       const result = await consumeInviteCode(inviteCode);
+      posthog.capture('signup_completed', { method: 'google' });
       if (result.trialDays > 0) {
         sessionStorage.setItem('pendingTrialDays', String(result.trialDays));
       }

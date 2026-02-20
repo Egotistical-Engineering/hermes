@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Sentry from '@sentry/react';
+import posthog from 'posthog-js';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -310,17 +311,24 @@ export default function FocusPage() {
       }
     }
 
+    posthog.capture('highlight_accepted', { type: highlight.type });
     dismissHighlight(highlight.id);
   }, [editor, dismissHighlight]);
 
   // Stable callback for HighlightPopover onDismiss
   const handleDismissHighlight = useCallback((id) => {
-    if (id) dismissHighlight(id);
-    else clearHighlight();
-  }, [dismissHighlight, clearHighlight]);
+    if (id) {
+      const h = highlights.find(hl => hl.id === id);
+      posthog.capture('highlight_dismissed', { type: h?.type });
+      dismissHighlight(id);
+    } else {
+      clearHighlight();
+    }
+  }, [highlights, dismissHighlight, clearHighlight]);
 
   // Reply from highlight: focus chat with context
   const handleReply = useCallback((highlight) => {
+    posthog.capture('highlight_replied', { type: highlight.type });
     const prefill = `Re: "${highlight.matchText.slice(0, 50)}${highlight.matchText.length > 50 ? '...' : ''}" — `;
     window.__hermesChatFocus?.(prefill);
     clearHighlight();
@@ -360,6 +368,13 @@ export default function FocusPage() {
 
     setWordCount(getWordCount(editor.getText()));
     clearHighlight();
+
+    const tabsUsed = Object.values(pagesRef.current).filter(v => v?.trim()).length;
+    posthog.capture('tab_switched', {
+      from_tab: activeTab,
+      to_tab: newTab,
+      tabs_with_content: tabsUsed,
+    });
   }, [editor, activeTab, storageKey, isLoggedIn, projectId, clearHighlight]);
 
   const handlePublishChange = useCallback((updates) => {
@@ -440,6 +455,10 @@ export default function FocusPage() {
     setProjectSubtitle(trimmed);
     try {
       await updateWritingProject(projectId, { subtitle: trimmed });
+      posthog.capture('subtitle_updated', {
+        action: projectSubtitle ? 'edited' : 'added',
+        is_empty: !trimmed,
+      });
     } catch {
       setProjectSubtitle(projectSubtitle);
     }

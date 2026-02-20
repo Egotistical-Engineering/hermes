@@ -20,6 +20,7 @@
     "@tiptap/react": "^3.19.0",
     "@tiptap/starter-kit": "^3.19.0",
     "hoist-non-react-statics": "^3.3.2",
+    "posthog-js": "^1.352.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hot-toast": "^2.6.0",

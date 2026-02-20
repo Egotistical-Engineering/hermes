@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import posthog from 'posthog-js';
 import { fetchAssistantConversation, startAssistantStream } from '@hermes/api';
 import useUsage from '../../hooks/useUsage';
 import SourcesPill from './SourcesPill';
@@ -110,6 +111,11 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
     // Optimistic user message
     const userMsg = { role: 'user', content: text, timestamp: new Date().toISOString() };
     setMessages((prev) => [...prev, userMsg]);
+
+    posthog.capture('chat_message_sent', {
+      message_length: text.length,
+      conversation_length: messages.length,
+    });
 
     // Start streaming placeholder for assistant
     const assistantMsg = { role: 'assistant', content: '', timestamp: new Date().toISOString() };

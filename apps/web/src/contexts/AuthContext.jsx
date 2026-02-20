@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect } from 'react';
+import posthog from 'posthog-js';
 import { activateTrial } from '@hermes/api';
 import { supabase } from '../lib/supabase';
 
@@ -27,10 +28,24 @@ export default function AuthProvider({ children }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
+      if (session?.user) {
+        posthog.identify(session.user.id, {
+          email: session.user.email,
+          auth_provider: session.user.app_metadata?.provider || 'email',
+        });
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session?.user) {
+        posthog.identify(session.user.id, {
+          email: session.user.email,
+          auth_provider: session.user.app_metadata?.provider || 'email',
+        });
+      } else {
+        posthog.reset();
+      }
     });
 
     return () => subscription.unsubscribe();

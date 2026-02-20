@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
+import posthog from 'posthog-js'
 import './index.css'
 import App from './App.jsx'
 import './lib/supabase'
@@ -22,6 +23,20 @@ Sentry.init({
   replaysSessionSampleRate: 0,
   replaysOnErrorSampleRate: 1.0,
 })
+
+if (import.meta.env.VITE_POSTHOG_KEY) {
+  posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
+    api_host: import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com',
+    autocapture: true,
+    capture_pageview: true,
+    capture_pageleave: true,
+    session_recording: {
+      maskAllInputs: true,
+      maskTextSelector: '.ProseMirror',
+    },
+    respect_dnt: true,
+  })
+}
 
 function SentryFallback() {
   return (

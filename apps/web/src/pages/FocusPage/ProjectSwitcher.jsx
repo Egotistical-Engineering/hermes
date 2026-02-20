@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import posthog from 'posthog-js';
 import { fetchWritingProjects, fetchWritingProject, createWritingProject, updateWritingProject, deleteWritingProject } from '@hermes/api';
 import { relativeTime } from '@hermes/domain';
 import useAuth from '../../hooks/useAuth';
@@ -88,6 +89,7 @@ export default function ProjectSwitcher({ projectId, projectTitle, onDropdownOpe
     setCreating(true);
     try {
       const project = await createWritingProject('New Project', session.user.id);
+      posthog.capture('project_created');
       closeDropdown();
       navigate(`/projects/${project.id}`);
     } catch {
