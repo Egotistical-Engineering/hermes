@@ -6,20 +6,13 @@ import { requireAuth } from '../middleware/auth.js';
 import { checkMessageLimit } from '../middleware/usageGate.js';
 import logger from '../lib/logger.js';
 import { mcpManager } from '../lib/mcp.js';
+import { isAdminUser } from '../lib/config.js';
 import type { UserMcpServerConfig } from '../lib/mcp.js';
 
 const router = Router();
 
 const anthro = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL = 'claude-sonnet-4-6';
-
-const ADMIN_USER_IDS = new Set(
-  (process.env.ADMIN_USER_IDS || '').split(',').map(id => id.trim()).filter(Boolean)
-);
-
-function isAdminUser(userId: string): boolean {
-  return ADMIN_USER_IDS.has(userId);
-}
 
 type SourceData = {
   url: string;
@@ -195,7 +188,10 @@ async function getOwnedProject(projectId: string, userId: string) {
 router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: Response) => {
   const parsed = ChatSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
+    res.status(400).json({
+      error: 'Invalid request',
+      ...(process.env.NODE_ENV !== 'production' && { details: parsed.error.issues }),
+    });
     return;
   }
 
@@ -300,12 +296,28 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
       { onConflict: 'project_id' },
     );
 
-  // Set up SSE response
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
+  // Track client disconnect for SSE cleanup
+  let clientDisconnected = false;
+  req.on('close', () => {
+    clientDisconnected = true;
   });
+
+  function safeSseWrite(data: string): boolean {
+    if (clientDisconnected) return false;
+    try {
+      res.write(data);
+      return true;
+    } catch {
+      clientDisconnected = true;
+      return false;
+    }
+  }
+
+  // Set up SSE response
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
 
   try {
     const anthropicMessages = allMessages.map((m) => ({
@@ -324,16 +336,28 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
     let continueLoop = true;
     let toolRound = 0;
 
-    while (continueLoop) {
-      const response = await anthro.messages.create({
-        model: MODEL,
-        max_tokens: getMaxTokens(pages),
-        temperature: 0.7,
-        system: systemContent,
-        tools,
-        messages,
-        stream: true,
-      });
+    // Anthropic API timeout: 120s per round
+    const ANTHROPIC_TIMEOUT_MS = 120_000;
+
+    while (continueLoop && !clientDisconnected) {
+      const timeoutController = new AbortController();
+      const timeoutId = setTimeout(() => timeoutController.abort(), ANTHROPIC_TIMEOUT_MS);
+
+      let response;
+      try {
+        response = await anthro.messages.create({
+          model: MODEL,
+          max_tokens: getMaxTokens(pages),
+          temperature: 0.7,
+          system: systemContent,
+          tools,
+          messages,
+          stream: true,
+        }, { signal: timeoutController.signal });
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        throw err;
+      }
 
       let currentToolName = '';
       let currentToolInput = '';
@@ -342,6 +366,8 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
       let stopReason: string | null = null;
 
       for await (const event of response) {
+        if (clientDisconnected) break;
+
         if (event.type === 'content_block_start') {
           if (event.content_block.type === 'text') {
             // Starting a text block
@@ -353,7 +379,7 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
         } else if (event.type === 'content_block_delta') {
           if (event.delta.type === 'text_delta') {
             fullTextResponse += event.delta.text;
-            res.write(`event: text\ndata: ${JSON.stringify({ chunk: event.delta.text })}\n\n`);
+            safeSseWrite(`event: text\ndata: ${JSON.stringify({ chunk: event.delta.text })}\n\n`);
           } else if (event.delta.type === 'input_json_delta') {
             currentToolInput += event.delta.partial_json;
           }
@@ -371,7 +397,7 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
                   suggestedEdit: input.suggestedEdit || undefined,
                 };
                 highlights.push(highlight);
-                res.write(`event: highlight\ndata: ${JSON.stringify(highlight)}\n\n`);
+                safeSseWrite(`event: highlight\ndata: ${JSON.stringify(highlight)}\n\n`);
               } catch {
                 logger.warn({ projectId }, 'Failed to parse highlight tool input');
               }
@@ -380,14 +406,14 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
                 const input = JSON.parse(currentToolInput);
                 const source: SourceData = { url: input.url, title: input.title };
                 sources.push(source);
-                res.write(`event: source\ndata: ${JSON.stringify(source)}\n\n`);
+                safeSseWrite(`event: source\ndata: ${JSON.stringify(source)}\n\n`);
               } catch {
                 logger.warn({ projectId }, 'Failed to parse cite_source tool input');
               }
             } else if (mcpManager.isMcpToolForUser(currentToolName, userId)) {
               // Notify frontend that an MCP tool is being invoked
               const server = mcpManager.serverName(currentToolName);
-              res.write(`event: tool_status\ndata: ${JSON.stringify({ tool: currentToolName, server, status: 'running' })}\n\n`);
+              safeSseWrite(`event: tool_status\ndata: ${JSON.stringify({ tool: currentToolName, server, status: 'running' })}\n\n`);
             }
 
             // Always push tool_use block for the result loop
@@ -404,6 +430,10 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
           stopReason = event.delta.stop_reason;
         }
       }
+
+      clearTimeout(timeoutId);
+
+      if (clientDisconnected) break;
 
       if (stopReason === 'tool_use') {
         toolRound++;
@@ -445,7 +475,7 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
             );
             const server = mcpManager.serverName(block.name);
             const status = result.isError ? 'error' : 'done';
-            res.write(`event: tool_status\ndata: ${JSON.stringify({ tool: block.name, server, status })}\n\n`);
+            safeSseWrite(`event: tool_status\ndata: ${JSON.stringify({ tool: block.name, server, status })}\n\n`);
             return {
               type: 'tool_result' as const,
               tool_use_id: block.id,
@@ -465,10 +495,7 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
       }
     }
 
-    // Send done event
-    res.write(`event: done\ndata: ${JSON.stringify({ messageId: crypto.randomUUID() })}\n\n`);
-
-    // Save assistant message with highlights and sources
+    // Always save conversation and highlights, even if client disconnected
     const assistantMessage: AssistantMessage = {
       role: 'assistant',
       content: fullTextResponse,
@@ -488,31 +515,34 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
         { onConflict: 'project_id' },
       );
 
-    // Also save highlights to project
+    // Atomically append highlights to project (capped at 200)
     if (highlights.length > 0) {
-      const { data: projectData } = await supabase
-        .from('projects')
-        .select('highlights')
-        .eq('id', projectId)
-        .single();
-
-      const existingHighlights = (projectData?.highlights as HighlightData[]) || [];
-      const merged = [...existingHighlights, ...highlights];
-
-      await supabase
-        .from('projects')
-        .update({ highlights: merged })
-        .eq('id', projectId);
+      await supabase.rpc('append_highlights', {
+        p_project_id: projectId,
+        p_user_id: userId,
+        p_new_highlights: highlights,
+      });
     }
 
     // Record successful message usage
     await supabase.from('message_usage').insert({ user_id: userId, project_id: projectId });
 
-    res.end();
+    // Send done + close only if client is still connected
+    if (!clientDisconnected) {
+      safeSseWrite(`event: done\ndata: ${JSON.stringify({ messageId: crypto.randomUUID() })}\n\n`);
+      res.end();
+    }
   } catch (error: any) {
-    logger.error({ error: error?.message, projectId }, 'Assistant chat stream failed');
-    res.write(`event: error\ndata: ${JSON.stringify({ error: 'Stream failed' })}\n\n`);
-    res.end();
+    // AbortError from timeout or client disconnect — handle gracefully
+    if (error?.name === 'AbortError') {
+      logger.info({ projectId }, 'Assistant stream aborted (timeout or client disconnect)');
+    } else {
+      logger.error({ error: error?.message, projectId }, 'Assistant chat stream failed');
+    }
+    if (!clientDisconnected) {
+      safeSseWrite(`event: error\ndata: ${JSON.stringify({ error: 'Stream failed' })}\n\n`);
+      res.end();
+    }
   }
 });
 

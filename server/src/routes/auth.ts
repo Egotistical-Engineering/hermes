@@ -1,9 +1,17 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod/v4';
+import rateLimit from 'express-rate-limit';
 import { supabase } from '../lib/supabase.js';
 import logger from '../lib/logger.js';
 
 const router = Router();
+
+const useInviteLimit = rateLimit({
+  windowMs: 60_000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const ValidateInviteSchema = z.object({
   inviteCode: z.string().trim().min(1),
@@ -11,7 +19,7 @@ const ValidateInviteSchema = z.object({
 
 const SignupSchema = z.object({
   email: z.email(),
-  password: z.string().min(6),
+  password: z.string().min(8),
   inviteCode: z.string().trim().min(1),
 });
 
@@ -49,7 +57,10 @@ router.post('/validate-invite', async (req: Request, res: Response) => {
 router.post('/signup', async (req: Request, res: Response) => {
   const parsed = SignupSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
+    res.status(400).json({
+      error: 'Invalid request',
+      ...(process.env.NODE_ENV !== 'production' && { details: parsed.error.issues }),
+    });
     return;
   }
 
@@ -94,7 +105,7 @@ router.post('/signup', async (req: Request, res: Response) => {
 
 // POST /api/auth/use-invite
 // Consume an invite code use (for Google OAuth flow — called before redirect)
-router.post('/use-invite', async (req: Request, res: Response) => {
+router.post('/use-invite', useInviteLimit, async (req: Request, res: Response) => {
   const parsed = UseInviteSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid request' });

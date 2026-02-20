@@ -1,15 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
+import { ADMIN_USER_IDS } from '../lib/config.js';
 
 const router = Router();
 
 const FREE_DAILY_LIMIT = 10;
 const PRO_MONTHLY_LIMIT = 300;
-
-const ADMIN_USER_IDS = new Set(
-  (process.env.ADMIN_USER_IDS || '').split(',').map(id => id.trim()).filter(Boolean),
-);
 
 router.get('/current', requireAuth, async (req: Request, res: Response) => {
   const userId = req.user!.id;

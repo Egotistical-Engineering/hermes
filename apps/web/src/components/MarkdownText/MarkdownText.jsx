@@ -1,6 +1,9 @@
+import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './MarkdownText.module.css';
+
+const REMARK_PLUGINS = [remarkGfm];
 
 const inlineComponents = {
   p: ({ children }) => <>{children}</>,
@@ -18,17 +21,17 @@ const inlineComponents = {
   hr: () => <span>{' '}</span>,
 };
 
-export default function MarkdownText({ value, inline = false, className = '' }) {
+export default memo(function MarkdownText({ value, inline = false, className = '' }) {
   if (!value) return null;
 
   return (
     <div className={`${styles.markdown} ${inline ? styles.inline : styles.block} ${className}`.trim()}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={REMARK_PLUGINS}
         components={inline ? inlineComponents : undefined}
       >
         {value}
       </ReactMarkdown>
     </div>
   );
-}
+});

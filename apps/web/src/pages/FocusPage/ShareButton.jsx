@@ -2,6 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { publishProject, unpublishProject, updatePublishSettings, generateSlug } from '@hermes/api';
 import styles from './ShareButton.module.css';
 
+function useTimeoutRef() {
+  const ref = useRef(null);
+  useEffect(() => () => { if (ref.current) clearTimeout(ref.current); }, []);
+  return ref;
+}
+
 const TAB_COLORS = {
   coral: '#e07a5f',
   amber: '#e0a05f',
@@ -32,6 +38,8 @@ export default function ShareButton({
   const [copied, setCopied] = useState(false);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const wrapRef = useRef(null);
+  const updatedTimerRef = useTimeoutRef();
+  const copiedTimerRef = useTimeoutRef();
 
   // Sync external open control
   useEffect(() => {
@@ -129,12 +137,12 @@ export default function ShareButton({
         publishedAt: result.publishedAt,
       });
       setUpdated(true);
-      setTimeout(() => setUpdated(false), 2000);
+      updatedTimerRef.current = setTimeout(() => setUpdated(false), 2000);
     } catch (err) {
       console.error('Update failed:', err);
     }
     setUpdating(false);
-  }, [projectId, authorName, selectedTabs, updating, onPublishChange]);
+  }, [projectId, authorName, selectedTabs, updating, onPublishChange, updatedTimerRef]);
 
   const handleUnpublish = useCallback(async () => {
     if (!projectId) return;
@@ -163,9 +171,9 @@ export default function ShareButton({
     if (!readUrl) return;
     navigator.clipboard.writeText(readUrl).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
     });
-  }, [readUrl]);
+  }, [readUrl, copiedTimerRef]);
 
   const shareIcon = (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

@@ -86,7 +86,6 @@ export async function checkMessageLimit(req: Request, res: Response, next: NextF
     next();
   } catch (err: any) {
     logger.error({ error: err?.message, userId }, 'Usage gate check failed');
-    // Fail open — don't block users if usage check fails
-    next();
+    res.status(503).json({ error: 'Unable to verify usage limits. Please try again.' });
   }
 }

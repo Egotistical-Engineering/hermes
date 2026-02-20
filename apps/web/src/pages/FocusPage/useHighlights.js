@@ -143,7 +143,9 @@ export default function useHighlights() {
 
   const addHighlights = useCallback((newHighlights) => {
     setHighlights((prev) => {
-      const updated = [...prev, ...newHighlights];
+      // Filter out dismissed highlights before appending new ones
+      const active = prev.filter((h) => !h.dismissed);
+      const updated = [...active, ...newHighlights];
       highlightsRef.current = updated;
       return updated;
     });

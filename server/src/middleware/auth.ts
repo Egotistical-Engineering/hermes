@@ -1,18 +1,35 @@
 import { Request, Response, NextFunction } from 'express';
-import { createClient } from '@supabase/supabase-js';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
-// Use the anon key (not service-role) so Supabase verifies the JWT signature
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
-const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
+type JwtUser = { id: string; email?: string };
 
-export async function getUserFromBearerToken(token: string): Promise<{ id: string; email?: string } | null> {
-  const { data, error } = await supabaseAuth.auth.getUser(token);
-  if (error || !data.user) return null;
-  return { id: data.user.id, email: data.user.email };
+// Lazy-initialized JWKS client — caches keys automatically
+let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+
+function getJwks() {
+  if (!jwks) {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    if (!supabaseUrl) throw new Error('SUPABASE_URL is required');
+    jwks = createRemoteJWKSet(
+      new URL(`${supabaseUrl}/auth/v1/.well-known/jwks.json`),
+    );
+  }
+  return jwks;
 }
 
-export async function getOptionalUser(req: Request): Promise<{ id: string; email?: string } | null> {
+export async function getUserFromBearerToken(token: string): Promise<JwtUser | null> {
+  try {
+    const { payload } = await jwtVerify(token, getJwks(), {
+      audience: 'authenticated',
+    });
+    if (!payload.sub) return null;
+    return { id: payload.sub, email: payload.email as string | undefined };
+  } catch {
+    return null;
+  }
+}
+
+export async function getOptionalUser(req: Request): Promise<JwtUser | null> {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7);
@@ -27,7 +44,6 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 
   const token = authHeader.slice(7);
-
   const user = await getUserFromBearerToken(token);
   if (!user) {
     res.status(401).json({ error: 'Invalid or expired token' });

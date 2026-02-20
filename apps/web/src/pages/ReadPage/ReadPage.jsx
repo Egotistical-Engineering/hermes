@@ -62,7 +62,17 @@ export default function ReadPage() {
   }, [shortId, slug, navigate]);
 
   if (loading) {
-    return <div className={styles.centered}>Loading...</div>;
+    return (
+      <div className={styles.centered}>
+        <div className={styles.skeleton}>
+          <div className={styles.skeletonLine} style={{ width: '60%', height: '24px' }} />
+          <div className={styles.skeletonLine} style={{ width: '40%', height: '14px' }} />
+          <div className={styles.skeletonLine} style={{ width: '100%', height: '14px' }} />
+          <div className={styles.skeletonLine} style={{ width: '90%', height: '14px' }} />
+          <div className={styles.skeletonLine} style={{ width: '75%', height: '14px' }} />
+        </div>
+      </div>
+    );
   }
 
   if (!essay) {

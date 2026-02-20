@@ -10,7 +10,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 // Guard middleware: reject requests when Stripe is not configured
 function requireStripe(_req: Request, res: Response, next: () => void) {
@@ -59,6 +59,12 @@ function getSubscriptionIdFromInvoice(invoice: Stripe.Invoice): string | null {
 // --- Webhook ---
 
 router.post('/webhook', async (req: Request, res: Response) => {
+  if (!webhookSecret) {
+    logger.warn('Stripe webhook rejected — STRIPE_WEBHOOK_SECRET not configured');
+    res.status(503).json({ error: 'Webhook signing secret not configured' });
+    return;
+  }
+
   const sig = req.headers['stripe-signature'] as string;
   if (!sig) {
     res.status(400).json({ error: 'Missing stripe-signature header' });
@@ -67,30 +73,28 @@ router.post('/webhook', async (req: Request, res: Response) => {
 
   let event: Stripe.Event;
   try {
-    event = stripe!.webhooks.constructEvent(req.body, sig, webhookSecret);
+    event = stripe!.webhooks.constructEvent(req.body, sig, webhookSecret!);
   } catch (err: any) {
     logger.warn({ error: err?.message }, 'Stripe webhook signature verification failed');
     res.status(400).json({ error: 'Webhook signature verification failed' });
     return;
   }
 
-  // Idempotency check
-  const { data: existing } = await supabase
+  // Atomic idempotency: INSERT ... ON CONFLICT to avoid race conditions
+  const { error: insertError } = await supabase
     .from('processed_stripe_events')
-    .select('event_id')
-    .eq('event_id', event.id)
-    .single();
+    .insert({ event_id: event.id, event_type: event.type });
 
-  if (existing) {
-    res.json({ received: true, duplicate: true });
+  if (insertError) {
+    // Postgres unique violation (23505) = duplicate event
+    if (insertError.code === '23505') {
+      res.json({ received: true, duplicate: true });
+      return;
+    }
+    logger.error({ error: insertError.message, eventId: event.id }, 'Failed to record Stripe event');
+    res.status(500).json({ error: 'Failed to process webhook' });
     return;
   }
-
-  // Mark as processing
-  await supabase.from('processed_stripe_events').insert({
-    event_id: event.id,
-    event_type: event.type,
-  });
 
   try {
     switch (event.type) {

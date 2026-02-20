@@ -24,6 +24,17 @@ export default defineConfig(async () => {
     plugins,
     build: {
       sourcemap: true,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-sentry': ['@sentry/react'],
+            'vendor-supabase': ['@supabase/supabase-js'],
+            'vendor-tiptap': ['@tiptap/react', '@tiptap/starter-kit', '@tiptap/extension-placeholder', '@tiptap/markdown'],
+            'vendor-markdown': ['react-markdown', 'remark-gfm'],
+          },
+        },
+      },
     },
     server: {
       port: 5176,
