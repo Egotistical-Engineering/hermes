@@ -3,10 +3,11 @@ import { Link, Navigate } from 'react-router-dom';
 import posthog from 'posthog-js';
 import { validateInviteCode, signupWithInvite, consumeInviteCode } from '@hermes/api';
 import useAuth from '../../hooks/useAuth';
+import { supabase } from '../../lib/supabase';
 import styles from './SignupPage.module.css';
 
 export default function SignupPage() {
-  const { session, signInWithGoogle } = useAuth();
+  const { session, signIn, signInWithGoogle } = useAuth();
   const [step, setStep] = useState('invite'); // 'invite' | 'signup' | 'done'
   const [inviteCode, setInviteCode] = useState('');
   const [email, setEmail] = useState('');
@@ -41,9 +42,34 @@ export default function SignupPage() {
     try {
       await signupWithInvite(email, password, inviteCode);
       posthog.capture('signup_completed', { method: 'email' });
-      setStep('done');
+
+      // Auto-login: try signing in immediately
+      const { error: signInError } = await signIn(email, password);
+      if (signInError) {
+        // Account created but can't sign in (email confirmation required, or network issue)
+        setStep('done');
+        return;
+      }
+      // signIn succeeded → session updates via onAuthStateChange → Navigate guard redirects
     } catch (err) {
       setError(err.message || 'Failed to create account');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (loading) return;
+    setError('');
+    setLoading(true);
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+      });
+      if (resendError) throw resendError;
+    } catch (err) {
+      setError(err.message || 'Failed to resend verification email');
     } finally {
       setLoading(false);
     }
@@ -71,10 +97,21 @@ export default function SignupPage() {
     return (
       <main className={styles.page}>
         <div className={styles.card}>
-          <h1 className={styles.title}>Account created</h1>
+          <h1 className={styles.title}>Check your email</h1>
           <p className={styles.confirmText}>
-            Your account has been created. You can now sign in.
+            We sent a verification link to <strong>{email}</strong>.
+            Click the link in your email to activate your account,
+            then come back to log in.
           </p>
+          {error && <p className={styles.error}>{error}</p>}
+          <button
+            type="button"
+            className={styles.primaryBtn}
+            disabled={loading}
+            onClick={handleResendVerification}
+          >
+            {loading ? 'Sending...' : 'Resend email'}
+          </button>
           <Link to="/login" className={styles.backLink}>Go to login</Link>
         </div>
       </main>
