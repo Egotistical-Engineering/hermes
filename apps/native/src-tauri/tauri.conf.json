@@ -42,6 +42,9 @@
       "nsis": {
         "installMode": "currentUser"
       }
+    },
+    "iOS": {
+      "developmentTeam": "9UKD4FL8UK"
     }
   },
   "plugins": {
