@@ -51,3 +51,15 @@
 .backLink {
   composes: backLink from '../../styles/auth.module.css';
 }
+
+.requirements {
+  composes: requirements from '../../styles/auth.module.css';
+}
+
+.met {
+  composes: met from '../../styles/auth.module.css';
+}
+
+.unmet {
+  composes: unmet from '../../styles/auth.module.css';
+}
