@@ -1,7 +1,8 @@
 import { createContext, useState, useEffect } from 'react';
 import posthog from 'posthog-js';
 import { activateTrial } from '@hermes/api';
-import { supabase } from '../lib/supabase';
+import { supabase, initOfflineAdapter } from '../lib/supabase';
+import { IS_TAURI } from '../lib/platform';
 
 export const AuthContext = createContext(null);
 
@@ -33,6 +34,8 @@ export default function AuthProvider({ children }) {
           email: session.user.email,
           auth_provider: session.user.app_metadata?.provider || 'email',
         });
+        // Initialize offline adapter for Tauri
+        initOfflineAdapter(session.user.id);
       }
     });
 
@@ -43,10 +46,36 @@ export default function AuthProvider({ children }) {
           email: session.user.email,
           auth_provider: session.user.app_metadata?.provider || 'email',
         });
+        // Initialize offline adapter for Tauri on auth change
+        initOfflineAdapter(session.user.id);
       } else {
         posthog.reset();
       }
     });
+
+    // Listen for deep link OAuth callback in Tauri
+    if (IS_TAURI) {
+      import('@tauri-apps/plugin-deep-link').then(({ onOpenUrl }) => {
+        onOpenUrl((urls) => {
+          for (const url of urls) {
+            if (url.startsWith('hermes://auth/callback')) {
+              const hashParams = new URL(url.replace('hermes://', 'https://placeholder/')).hash;
+              if (hashParams) {
+                // Extract tokens from the deep link and set session
+                const params = new URLSearchParams(hashParams.replace('#', ''));
+                const accessToken = params.get('access_token');
+                const refreshToken = params.get('refresh_token');
+                if (accessToken && refreshToken) {
+                  supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+                }
+              }
+            }
+          }
+        });
+      }).catch(() => {
+        // Deep link plugin not available
+      });
+    }
 
     return () => subscription.unsubscribe();
   }, []);
@@ -68,11 +97,28 @@ export default function AuthProvider({ children }) {
   const signIn = (email, password) =>
     supabase.auth.signInWithPassword({ email, password });
 
-  const signInWithGoogle = () =>
-    supabase.auth.signInWithOAuth({
+  const signInWithGoogle = async () => {
+    if (IS_TAURI) {
+      // In Tauri, open OAuth in system browser and handle callback via deep link
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          skipBrowserRedirect: true,
+          redirectTo: 'hermes://auth/callback',
+        },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        const { open } = await import('@tauri-apps/plugin-shell');
+        await open(data.url);
+      }
+      return { data, error };
+    }
+    return supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: `${window.location.origin}/login` },
     });
+  };
 
   const signOut = () => supabase.auth.signOut();
 
