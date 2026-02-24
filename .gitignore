@@ -37,3 +37,7 @@ test-results
 DESIGN_SYSTEM.md
 .claude/
 .vercel
+
+# Tauri build artifacts
+apps/native/src-tauri/target/
+apps/native/src-tauri/gen/

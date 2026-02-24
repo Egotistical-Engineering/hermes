@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "workspaces": [
     "apps/web",
+    "apps/native",
     "packages/*",
     "server"
   ],
@@ -16,7 +17,13 @@
     "web:dev:staging": "npm run dev:staging -w @hermes/web",
     "server:typecheck": "npm run typecheck -w server",
     "test:web": "playwright test",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "native:dev": "cd apps/native && cargo tauri dev",
+    "native:build": "cd apps/native && cargo tauri build",
+    "native:ios:dev": "cd apps/native && cargo tauri ios dev",
+    "native:android:dev": "cd apps/native && cargo tauri android dev",
+    "native:ios:build": "cd apps/native && cargo tauri ios build",
+    "native:android:build": "cd apps/native && cargo tauri android build"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.1",

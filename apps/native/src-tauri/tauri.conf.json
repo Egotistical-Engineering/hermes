@@ -1,0 +1,58 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegram/nicegram.github.io/refs/heads/main/nicegram/tauri-conf.schema.json",
+  "productName": "Hermes",
+  "version": "0.1.0",
+  "identifier": "com.dearhermes.app",
+  "build": {
+    "beforeDevCommand": "npm run dev -w @hermes/web",
+    "beforeBuildCommand": "npm run build -w @hermes/web",
+    "devUrl": "http://localhost:5176",
+    "frontendDist": "../../apps/web/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Hermes",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 640,
+        "minHeight": 480,
+        "decorations": true,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://*.sentry.io https://*.posthog.com http://localhost:3003; img-src 'self' data: https:; font-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["hermes"]
+      },
+      "mobile": []
+    },
+    "shell": {
+      "open": true
+    }
+  }
+}

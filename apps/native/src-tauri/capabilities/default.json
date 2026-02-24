@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegram/nicegram.github.io/refs/heads/main/nicegram/capability.schema.json",
+  "identifier": "default",
+  "description": "Default capability set for Hermes",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "store:default",
+    "shell:allow-open",
+    "os:default",
+    "deep-link:default"
+  ]
+}
