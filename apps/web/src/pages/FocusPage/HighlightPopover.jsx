@@ -21,20 +21,22 @@ export default memo(function HighlightPopover({
 }) {
   const popoverRef = useRef(null);
 
-  // Close on outside click
+  // Close on outside click or touch
   useEffect(() => {
     const handleClick = (e) => {
       if (popoverRef.current && !popoverRef.current.contains(e.target)) {
         onDismiss();
       }
     };
-    // Delay to avoid immediate close from the click that opened it
+    // Delay to avoid immediate close from the click/tap that opened it
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClick);
+      document.addEventListener('touchstart', handleClick);
     }, 50);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('touchstart', handleClick);
     };
   }, [onDismiss]);
 

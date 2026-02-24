@@ -9,6 +9,7 @@ import Link from '@tiptap/extension-link';
 import { Markdown } from '@tiptap/markdown';
 import { Slice } from '@tiptap/pm/model';
 import { fetchWritingProject, saveProjectPages, saveProjectHighlights, updateWritingProject, updatePublishSettings, generateSlug, fetchCurrentUsage } from '@hermes/api';
+import { IS_MOBILE } from '../../lib/platform';
 import useAuth from '../../hooks/useAuth';
 import useFocusMode from './useFocusMode';
 import useHighlights, { getDocFlatText, flatOffsetToPos } from './useHighlights';
@@ -48,6 +49,19 @@ export default function FocusPage() {
     publishedAt: null,
   });
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  // Track online/offline status
+  useEffect(() => {
+    const goOnline = () => setIsOffline(false);
+    const goOffline = () => setIsOffline(true);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
   const [_dropdownOpen, setDropdownOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const shortcutsRef = useRef(null);
@@ -182,6 +196,16 @@ export default function FocusPage() {
   useEffect(() => {
     syncHighlights(editor);
   }, [editor, highlights, syncHighlights]);
+
+  // Init mobile keyboard handler for Tauri mobile
+  useEffect(() => {
+    if (!IS_MOBILE) return;
+    let destroy;
+    import('../../lib/mobileKeyboard.js').then(({ initMobileKeyboard }) => {
+      destroy = initMobileKeyboard();
+    });
+    return () => { if (destroy) destroy(); };
+  }, []);
 
   // Load content: Supabase first (if logged in), then localStorage fallback
   useEffect(() => {
@@ -595,6 +619,7 @@ export default function FocusPage() {
           )}
 
           <div className={styles.settingsRight}>
+            {isOffline && <span className={styles.offlineBadge}>Offline</span>}
             <span className={styles.wordCount}>
               {wordCount} {wordCount === 1 ? 'word' : 'words'}
             </span>
@@ -814,6 +839,7 @@ export default function FocusPage() {
           activeTab={activeTab}
           onHighlights={handleHighlights}
           session={session}
+          isOffline={isOffline}
         />
       </Sentry.ErrorBoundary>
 

@@ -53,7 +53,7 @@ async function readAssistantStream(response, { onText, onHighlight, onSource, on
   }
 }
 
-export default function FocusChatWindow({ projectId, getPages, activeTab, onHighlights, session }) {
+export default function FocusChatWindow({ projectId, getPages, activeTab, onHighlights, session, isOffline }) {
   const [expanded, setExpanded] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -343,7 +343,12 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
 
       {isLoggedIn && (
         <div className={styles.inputArea}>
-          {usage && (
+          {isOffline && (
+            <div className={styles.usageCounter}>
+              Offline — past messages visible
+            </div>
+          )}
+          {!isOffline && usage && (
             <div className={styles.usageCounter}>
               {usage.remaining} messages remaining
             </div>
@@ -352,11 +357,11 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
             ref={inputRef}
             className={styles.inputField}
             type="text"
-            placeholder={streaming ? 'Hermes is thinking...' : 'Type a message...'}
+            placeholder={isOffline ? 'Offline — connect to send messages' : streaming ? 'Hermes is thinking...' : 'Type a message...'}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={streaming}
+            disabled={streaming || isOffline}
           />
         </div>
       )}

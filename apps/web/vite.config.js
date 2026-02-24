@@ -25,6 +25,13 @@ export default defineConfig(async () => {
     build: {
       sourcemap: true,
       rollupOptions: {
+        // Tauri plugins are only available inside the native shell — exclude from web build
+        external: [
+          '@tauri-apps/plugin-deep-link',
+          '@tauri-apps/plugin-shell',
+          '@tauri-apps/plugin-store',
+          '@hermes/offline',
+        ],
         output: {
           manualChunks: {
             'vendor-react': ['react', 'react-dom', 'react-router-dom'],
@@ -39,6 +46,7 @@ export default defineConfig(async () => {
     server: {
       port: 5176,
       strictPort: true,
+      host: process.env.TAURI_DEV_HOST || 'localhost',
     },
   };
 });
