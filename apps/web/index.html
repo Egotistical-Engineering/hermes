@@ -26,8 +26,10 @@
     <script>
       // Prevent theme flash — apply saved theme before first paint
       (function () {
-        var t = localStorage.getItem('hermes-theme');
-        if (t && t !== 'light') document.documentElement.setAttribute('data-theme', t);
+        try {
+          var t = localStorage.getItem('hermes-theme');
+          if (t && t !== 'light') document.documentElement.setAttribute('data-theme', t);
+        } catch(e) { /* localStorage blocked (in-app browsers) */ }
       })();
     </script>
     <!-- Analytics script removed for open source -->
