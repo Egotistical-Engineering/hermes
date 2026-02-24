@@ -62,10 +62,11 @@ router.post('/validate-invite', async (req: Request, res: Response) => {
 router.post('/signup', async (req: Request, res: Response) => {
   const parsed = SignupSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({
-      error: 'Invalid request',
-      ...(process.env.NODE_ENV !== 'production' && { details: parsed.error.issues }),
-    });
+    const passwordIssue = parsed.error.issues.find(i => i.path.includes('password'));
+    const error = passwordIssue
+      ? 'Password must be at least 8 characters'
+      : 'Invalid request';
+    res.status(400).json({ error });
     return;
   }
 
@@ -99,7 +100,7 @@ router.post('/signup', async (req: Request, res: Response) => {
 
     const message = createError.message?.includes('already been registered')
       ? 'An account with this email already exists'
-      : 'Failed to create account';
+      : createError.message || 'Failed to create account';
 
     logger.warn({ email, error: createError.message }, 'User creation failed, rolled back invite code');
     res.status(400).json({ error: message });

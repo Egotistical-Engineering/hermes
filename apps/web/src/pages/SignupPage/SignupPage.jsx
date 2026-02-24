@@ -150,6 +150,13 @@ export default function SignupPage() {
     );
   }
 
+  const passwordChecks = {
+    length: password.length >= 8,
+    number: /\d/.test(password),
+    symbol: /[^a-zA-Z0-9]/.test(password),
+  };
+  const passwordValid = passwordChecks.length && passwordChecks.number && passwordChecks.symbol;
+
   // step === 'signup'
   return (
     <main className={styles.page}>
@@ -174,11 +181,17 @@ export default function SignupPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className={styles.input}
-            minLength={6}
             required
           />
         </label>
-        <button type="submit" className={styles.primaryBtn} disabled={loading}>
+        {password && (
+          <div className={styles.requirements}>
+            <span className={passwordChecks.length ? styles.met : styles.unmet}>At least 8 characters</span>
+            <span className={passwordChecks.number ? styles.met : styles.unmet}>Contains a number</span>
+            <span className={passwordChecks.symbol ? styles.met : styles.unmet}>Contains a symbol</span>
+          </div>
+        )}
+        <button type="submit" className={styles.primaryBtn} disabled={loading || !passwordValid}>
           {loading ? 'Creating account...' : 'Sign up'}
         </button>
         <div className={styles.divider}>or</div>
