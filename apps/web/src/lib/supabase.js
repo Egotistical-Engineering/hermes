@@ -9,10 +9,31 @@ import { IS_TAURI } from './platform';
 
 const INIT_FLAG = '__hermes_api_initialized__';
 
+// In-app browsers (Twitter, Instagram, etc.) can block localStorage/sessionStorage.
+// Fall back to an in-memory store so the app still renders.
+function safeStorage(storage) {
+  try {
+    const key = '__hermes_storage_test__';
+    storage.setItem(key, '1');
+    storage.removeItem(key);
+    return storage;
+  } catch {
+    const mem = new Map();
+    return {
+      getItem: (k) => mem.get(k) ?? null,
+      setItem: (k, v) => mem.set(k, v),
+      removeItem: (k) => mem.delete(k),
+      get length() { return mem.size; },
+      clear: () => mem.clear(),
+      key: () => null,
+    };
+  }
+}
+
 export async function initWebApi() {
   if (globalThis[INIT_FLAG]) return;
 
-  let authStorage = localStorage;
+  let authStorage = safeStorage(localStorage);
   let detectSessionInUrl = true;
 
   if (IS_TAURI) {
