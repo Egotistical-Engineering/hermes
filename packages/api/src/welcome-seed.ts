@@ -47,11 +47,11 @@ Instead, the assistant helps you go deeper: challenging weak arguments, asking w
 
   sage: `# About Hermes
 
-Hermes is built on a design philosophy called **Dignified Technology** — the idea that tools should protect and elevate the creative, expressive, and irreplaceable dimensions of human work.
+Hermes is built on a design philosophy called **[Dignified Technology](http://dignifiedtechnology.org/)** — the idea that tools should protect and elevate the creative, expressive, and irreplaceable dimensions of human work.
 
 Every AI product makes a choice: use the technology to *replace* the human in the process, or use it to help them go *deeper*. Hermes chooses depth. The writing is yours. The thinking is yours. The tool just helps you do both better.
 
-You can read the full essay — [What Does a Tool Owe You?](https://dearhermes.com) — in the project switcher. It ships with every new account.
+You can read the full essay — *What Does a Tool Owe You?* — in the project switcher. It ships with every new account.
 
 ## Open source
 

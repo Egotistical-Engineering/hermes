@@ -200,7 +200,11 @@ export async function fetchWritingProject(projectId: string): Promise<WritingPro
   return project;
 }
 
-export async function createWritingProject(title: string, userId: string): Promise<WritingProject> {
+export async function createWritingProject(
+  title: string,
+  userId: string,
+  options?: { subtitle?: string; pages?: Record<string, string> },
+): Promise<WritingProject> {
   const ds = getDataSource();
   if (ds) return ds.createProject(title, userId);
 
@@ -210,6 +214,8 @@ export async function createWritingProject(title: string, userId: string): Promi
       title,
       user_id: userId,
       status: 'interview',
+      ...(options?.subtitle && { subtitle: options.subtitle }),
+      ...(options?.pages && { pages: options.pages }),
     })
     .select('*')
     .single<WritingProjectRow>();

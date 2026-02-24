@@ -45,8 +45,8 @@ function RedirectToLatestProject() {
         if (projects.length > 0) {
           navigate(`/projects/${projects[0].id}`, { replace: true });
         } else {
-          // First login — seed Welcome + Essay projects
-          // Check if the user wrote custom content before signing up
+          // First login — seed Welcome + Essay projects in background,
+          // then create a starter project and navigate to it
           let customPages;
           try {
             const raw = localStorage.getItem('hermes-welcome-pages');
@@ -61,23 +61,29 @@ function RedirectToLatestProject() {
             }
           } catch { /* malformed localStorage — fall through to default seed */ }
 
-          let welcomeProject;
-          try { welcomeProject = await seedWelcomeProject(session.user.id, customPages); } catch { /* continue */ }
+          let seededCustomPages = false;
+          try { await seedWelcomeProject(session.user.id, customPages); seededCustomPages = !!customPages; } catch { /* continue */ }
           try { await seedEssayProject(session.user.id); } catch { /* continue */ }
           if (cancelled) return;
 
           // Clean up localStorage after successful migration
-          if (welcomeProject && customPages) {
+          if (seededCustomPages) {
             try { localStorage.removeItem('hermes-welcome-pages'); } catch { /* ignore */ }
           }
 
-          if (welcomeProject) {
-            navigate(`/projects/${welcomeProject.id}`, { replace: true });
-          } else {
-            const project = await createWritingProject('Your First Project', session.user.id);
-            if (cancelled) return;
-            navigate(`/projects/${project.id}`, { replace: true });
-          }
+          // Create a starter project and land on it
+          const starterProject = await createWritingProject(
+            'My First Project',
+            session.user.id,
+            {
+              subtitle: 'A brief description of your piece',
+              pages: {
+                coral: 'Start writing here.\n\nCheck the *Welcome to Hermes* project in the sidebar for a tour of the editor and assistant.',
+              },
+            },
+          );
+          if (cancelled) return;
+          navigate(`/projects/${starterProject.id}`, { replace: true });
         }
       } catch {
         if (!cancelled) setFallback(true);
