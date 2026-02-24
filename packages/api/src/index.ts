@@ -1,5 +1,6 @@
 export { initSupabase, getSupabase, _resetSupabase, type SupportedStorage } from './supabase';
 export { initPlatform, getPlatform } from './config';
+export { setDataSourceAdapter, getDataSource, type DataSourceAdapter } from './dataSource';
 export { createWebSessionStorageAdapter, type StorageAdapter } from './storage';
 
 export {
@@ -33,6 +34,10 @@ export { fetchMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, tes
 export type { McpServer } from './mcpServers';
 
 export { WELCOME_PAGES, WELCOME_HIGHLIGHTS } from './welcome-seed';
+
+export {
+  toWritingProject,
+} from './writing';
 
 export type {
   WritingStatus,

@@ -1,0 +1,12 @@
+{
+  "name": "@hermes/offline",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "sideEffects": false,
+  "dependencies": {
+    "@hermes/api": "file:../api",
+    "dexie": "^4.0.11"
+  }
+}

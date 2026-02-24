@@ -1,5 +1,6 @@
 import { getSupabase } from './supabase';
 import { getPlatform } from './config';
+import { getDataSource } from './dataSource';
 import { ESSAY_TITLE, ESSAY_SUBTITLE, ESSAY_PAGES } from './essay-seed';
 import { WELCOME_TITLE, WELCOME_PAGES } from './welcome-seed';
 
@@ -150,6 +151,9 @@ export function toWritingProject(row: WritingProjectRow): WritingProject {
 }
 
 export async function fetchWritingProjects(): Promise<WritingProject[]> {
+  const ds = getDataSource();
+  if (ds) return ds.fetchProjects();
+
   if (projectListCache && Date.now() - projectListCache.timestamp <= CACHE_TTL) {
     return projectListCache.data;
   }
@@ -170,6 +174,9 @@ export async function fetchWritingProjects(): Promise<WritingProject[]> {
 }
 
 export async function fetchWritingProject(projectId: string): Promise<WritingProject | null> {
+  const ds = getDataSource();
+  if (ds) return ds.fetchProject(projectId);
+
   const cached = getCached(projectCache, projectId);
   if (cached !== undefined) return cached;
 
@@ -194,6 +201,9 @@ export async function fetchWritingProject(projectId: string): Promise<WritingPro
 }
 
 export async function createWritingProject(title: string, userId: string): Promise<WritingProject> {
+  const ds = getDataSource();
+  if (ds) return ds.createProject(title, userId);
+
   const { data, error } = await getSupabase()
     .from('projects')
     .insert({
@@ -213,6 +223,9 @@ export async function updateWritingProject(
   projectId: string,
   updates: Partial<{ title: string; subtitle: string; status: WritingStatus }>,
 ): Promise<WritingProject> {
+  const ds = getDataSource();
+  if (ds) return ds.updateProject(projectId, updates);
+
   const { data, error } = await getSupabase()
     .from('projects')
     .update(updates)
@@ -227,6 +240,9 @@ export async function updateWritingProject(
 }
 
 export async function deleteWritingProject(projectId: string): Promise<void> {
+  const ds = getDataSource();
+  if (ds) return ds.deleteProject(projectId);
+
   const { error } = await getSupabase()
     .from('projects')
     .delete()
@@ -273,6 +289,9 @@ export async function seedWelcomeProject(
 // --- Assistant API ---
 
 export async function saveProjectPages(projectId: string, pages: Record<string, string>): Promise<void> {
+  const ds = getDataSource();
+  if (ds) return ds.savePages(projectId, pages);
+
   const { error } = await getSupabase()
     .from('projects')
     .update({ pages })
@@ -283,6 +302,9 @@ export async function saveProjectPages(projectId: string, pages: Record<string, 
 }
 
 export async function saveProjectContent(projectId: string, content: string): Promise<void> {
+  const ds = getDataSource();
+  if (ds) return ds.saveContent(projectId, content);
+
   const { error } = await getSupabase()
     .from('projects')
     .update({ content })
@@ -293,6 +315,9 @@ export async function saveProjectContent(projectId: string, content: string): Pr
 }
 
 export async function saveProjectHighlights(projectId: string, highlights: Highlight[]): Promise<void> {
+  const ds = getDataSource();
+  if (ds) return ds.saveHighlights(projectId, highlights);
+
   const { error } = await getSupabase()
     .from('projects')
     .update({ highlights })
@@ -303,6 +328,9 @@ export async function saveProjectHighlights(projectId: string, highlights: Highl
 }
 
 export async function fetchAssistantConversation(projectId: string): Promise<AssistantMessage[]> {
+  const ds = getDataSource();
+  if (ds) return ds.fetchConversation(projectId);
+
   const cached = getCached(conversationCache, projectId);
   if (cached !== undefined) return cached;
 
@@ -320,6 +348,9 @@ export async function fetchAssistantConversation(projectId: string): Promise<Ass
 }
 
 export async function saveAssistantConversation(projectId: string, messages: AssistantMessage[]): Promise<void> {
+  const ds = getDataSource();
+  if (ds) return ds.saveConversation(projectId, messages);
+
   const { error } = await getSupabase()
     .from('assistant_conversations')
     .upsert(
