@@ -50,7 +50,7 @@ export default function UpgradePage() {
         </p>
         <h2 className={styles.subtitle}>What you get</h2>
         <ul className={styles.features}>
-          <li>300 messages per month (vs 10/day free)</li>
+          <li>300 messages per month (vs 10/day for 7 days)</li>
           <li>Early access to beta features (MCP, editor agents, and more)</li>
           <li>The satisfaction of funding independent, dignified technology</li>
         </ul>
