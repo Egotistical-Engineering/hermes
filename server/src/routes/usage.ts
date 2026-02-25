@@ -80,7 +80,10 @@ router.get('/current', requireAuth, async (req: Request, res: Response) => {
       });
       used = data ?? 0;
       limit = FREE_DAILY_LIMIT;
-      resetInfo = 'Resets daily at midnight UTC';
+      const freeDaysLeft = Math.max(0, Math.ceil(
+        (new Date(profile.created_at).getTime() + FREE_TIER_DAYS * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
+      ));
+      resetInfo = `Resets daily · ${freeDaysLeft} day${freeDaysLeft !== 1 ? 's' : ''} left in free trial`;
     }
   }
 

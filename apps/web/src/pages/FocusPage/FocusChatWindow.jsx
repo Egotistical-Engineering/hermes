@@ -211,7 +211,7 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
             ? `Your 7-day free trial has ended.\n\nBecome a Patron ($15/mo) to continue using Hermes. [Learn more](/upgrade)`
             : err.isTrial
               ? `You've used all ${err.limit} trial messages for this month.\n\nBecome a Patron ($15/mo) to get 300 messages per month. [Learn more](/upgrade)`
-              : `You've reached your daily limit of ${err.limit} messages.\n\nBecome a Patron ($15/mo) to get 300 messages per month and support Hermes development. [Learn more](/upgrade)`;
+              : `You've used all ${err.limit} free messages for today. Your free trial includes 10 messages/day for 7 days.\n\nBecome a Patron ($15/mo) to get 300 messages per month and support Hermes development. [Learn more](/upgrade)`;
 
         setMessages((prev) => {
           const updated = [...prev];

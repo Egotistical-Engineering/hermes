@@ -265,10 +265,15 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
               <div className={styles.billingView}>
                 <div className={styles.billingTitle}>Billing</div>
                 <div className={styles.billingPlan}>
-                  {usage?.plan === 'pro' ? 'Patron' : usage?.isTrial ? 'Trial' : 'Free'} plan
+                  {usage?.plan === 'pro' ? 'Patron' : usage?.isTrial ? 'Trial' : 'Free trial'} plan
                   {usage?.isTrial && usage?.trialExpiresAt && (
                     <span className={styles.billingCancelNote}>
                       {' '}({Math.max(0, Math.ceil((new Date(usage.trialExpiresAt) - Date.now()) / (1000 * 60 * 60 * 24)))} days remaining)
+                    </span>
+                  )}
+                  {usage?.plan !== 'pro' && !usage?.isTrial && usage?.freeExpiresAt && !usage?.freeExpired && (
+                    <span className={styles.billingCancelNote}>
+                      {' '}({Math.max(0, Math.ceil((new Date(usage.freeExpiresAt) - Date.now()) / (1000 * 60 * 60 * 24)))} days remaining)
                     </span>
                   )}
                   {usage?.cancelAtPeriodEnd && usage?.currentPeriodEnd && (
@@ -297,7 +302,7 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
                 ) : usage?.isTrial ? (
                   <>
                     <div className={styles.billingThankYou}>
-                      After your trial, you'll have 10 messages/day on the Free plan.
+                      After your trial ends, you'll need to become a Patron to continue.
                     </div>
                     <Link
                       className={styles.billingActionBtn}
