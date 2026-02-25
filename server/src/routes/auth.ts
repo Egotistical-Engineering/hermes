@@ -49,8 +49,13 @@ router.post('/validate-invite', async (req: Request, res: Response) => {
     .eq('code', inviteCode)
     .single();
 
-  if (error || !data || data.current_uses >= data.max_uses) {
+  if (error || !data) {
     res.status(403).json({ error: 'Invalid or expired invite code' });
+    return;
+  }
+
+  if (data.current_uses >= data.max_uses) {
+    res.status(403).json({ error: 'This invite code has been fully claimed' });
     return;
   }
 
@@ -71,6 +76,23 @@ router.post('/signup', async (req: Request, res: Response) => {
   }
 
   const { email, password, inviteCode } = parsed.data;
+
+  // Pre-check: distinguish "not found" from "fully claimed" before consuming
+  const { data: codeRow, error: lookupError } = await supabase
+    .from('invite_codes')
+    .select('current_uses, max_uses')
+    .eq('code', inviteCode)
+    .single();
+
+  if (lookupError || !codeRow) {
+    res.status(403).json({ error: 'Invalid or expired invite code' });
+    return;
+  }
+
+  if (codeRow.current_uses >= codeRow.max_uses) {
+    res.status(403).json({ error: 'This invite code has been fully claimed' });
+    return;
+  }
 
   // Atomically consume an invite code use (v2 returns trial info)
   const { data: trialResult, error: rpcError } = await supabase.rpc('use_invite_code_v2', {
@@ -134,6 +156,23 @@ router.post('/use-invite', useInviteLimit, async (req: Request, res: Response) =
   }
 
   const { inviteCode } = parsed.data;
+
+  // Pre-check: distinguish "not found" from "fully claimed" before consuming
+  const { data: codeRow, error: lookupError } = await supabase
+    .from('invite_codes')
+    .select('current_uses, max_uses')
+    .eq('code', inviteCode)
+    .single();
+
+  if (lookupError || !codeRow) {
+    res.status(403).json({ error: 'Invalid or expired invite code' });
+    return;
+  }
+
+  if (codeRow.current_uses >= codeRow.max_uses) {
+    res.status(403).json({ error: 'This invite code has been fully claimed' });
+    return;
+  }
 
   const { data: trialResult, error: rpcError } = await supabase.rpc('use_invite_code_v2', {
     code_input: inviteCode,
