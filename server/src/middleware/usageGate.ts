@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { supabase } from '../lib/supabase.js';
 import logger from '../lib/logger.js';
-import { FREE_DAILY_LIMIT, PRO_MONTHLY_LIMIT, TRIAL_MONTHLY_LIMIT } from '../lib/limits.js';
+import { FREE_DAILY_LIMIT, FREE_TIER_DAYS, PRO_MONTHLY_LIMIT, TRIAL_MONTHLY_LIMIT } from '../lib/limits.js';
 
 export async function checkMessageLimit(req: Request, res: Response, next: NextFunction) {
   const userId = req.user!.id;
@@ -10,7 +10,7 @@ export async function checkMessageLimit(req: Request, res: Response, next: NextF
     // Fetch user profile
     let { data: profile } = await supabase
       .from('user_profiles')
-      .select('plan, subscription_status, billing_cycle_anchor, cancel_at_period_end, current_period_end, trial_expires_at')
+      .select('plan, subscription_status, billing_cycle_anchor, cancel_at_period_end, current_period_end, trial_expires_at, created_at')
       .eq('id', userId)
       .single();
 
@@ -24,6 +24,7 @@ export async function checkMessageLimit(req: Request, res: Response, next: NextF
         cancel_at_period_end: false,
         current_period_end: null,
         trial_expires_at: null,
+        created_at: new Date().toISOString(),
       };
     }
 
@@ -58,7 +59,25 @@ export async function checkMessageLimit(req: Request, res: Response, next: NextF
       used = data ?? 0;
       limit = TRIAL_MONTHLY_LIMIT;
     } else {
-      // Free (or expired trial): count messages today (UTC)
+      // Free (or expired trial): check if 7-day free period has elapsed
+      const accountAge = Date.now() - new Date(profile.created_at).getTime();
+      const freeExpired = accountAge > FREE_TIER_DAYS * 24 * 60 * 60 * 1000;
+
+      if (freeExpired) {
+        res.status(429).json({
+          error: 'Message limit reached',
+          code: 'FREE_EXPIRED',
+          message: 'Your 7-day free trial has ended. Upgrade to Pro to continue using Hermes.',
+          plan: profile.plan,
+          used: FREE_DAILY_LIMIT,
+          limit: FREE_DAILY_LIMIT,
+          isTrial: false,
+          trialExpiresAt: null,
+        });
+        return;
+      }
+
+      // Count messages today (UTC)
       const today = new Date().toISOString().split('T')[0];
       const { data } = await supabase.rpc('count_daily_messages', {
         p_user_id: userId,

@@ -12,6 +12,8 @@ export interface UsageInfo {
   hasMcpAccess: boolean;
   isTrial: boolean;
   trialExpiresAt: string | null;
+  freeExpired: boolean;
+  freeExpiresAt: string | null;
 }
 
 function normalizeBaseUrl(url: string): string {
