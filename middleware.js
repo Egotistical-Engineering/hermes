@@ -21,9 +21,17 @@ const BROWSER_ENGINES = [
   'arc/',
 ];
 
+function isTwitterInAppBrowser(ua) {
+  // iOS and Android X/Twitter in-app browsers include "twitter" in UA.
+  // Keep Twitter's crawler out of the browser path.
+  return ua.includes('twitter') && !ua.includes('twitterbot');
+}
+
 function isRealBrowser(request) {
   const userAgent = request.headers.get('user-agent') || '';
   const ua = userAgent.toLowerCase();
+
+  if (isTwitterInAppBrowser(ua)) return true;
 
   if (!BROWSER_ENGINES.some((engine) => ua.includes(engine))) return false;
 
@@ -119,6 +127,10 @@ export default async function middleware(request) {
 
     const canonicalUrl = `${url.origin}/read/${project.short_id}/${project.slug || 'essay'}`;
     const ogImageUrl = `${url.origin}/api/og?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}`;
+    const shouldRefreshToCanonical = (url.pathname + url.search) !== (`/read/${project.short_id}/${project.slug || 'essay'}` + url.search);
+    const refreshTag = shouldRefreshToCanonical
+      ? `<meta http-equiv="refresh" content="0;url=${escapeHtml(canonicalUrl)}">`
+      : '';
 
     const html = `<!DOCTYPE html>
 <html>
@@ -136,7 +148,7 @@ export default async function middleware(request) {
   <meta name="twitter:title" content="${escapeHtml(title)}">
   <meta name="twitter:description" content="${escapeHtml(description)}">
   <meta name="twitter:image" content="${escapeHtml(ogImageUrl)}">
-  <meta http-equiv="refresh" content="0;url=${escapeHtml(canonicalUrl)}">
+  ${refreshTag}
 </head>
 <body></body>
 </html>`;
