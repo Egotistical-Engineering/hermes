@@ -26,9 +26,10 @@ function RedirectToLatestProject() {
   const { session } = useAuth();
   const navigate = useNavigate();
   const [fallback, setFallback] = useState(false);
+  const userId = session?.user?.id || null;
 
   useEffect(() => {
-    if (!session?.user?.id) {
+    if (!userId) {
       // Not logged in — show the editor with no project (freeform mode)
       setFallback(true);
       return;
@@ -38,7 +39,18 @@ function RedirectToLatestProject() {
 
     (async () => {
       try {
-        const { fetchWritingProjects, createWritingProject, seedEssayProject, seedWelcomeProject, WELCOME_PAGES } = await import('@hermes/api');
+        const { fetchWritingProjects, cleanupDefaultProjectDuplicates, createWritingProject, seedEssayProject, seedWelcomeProject, WELCOME_PAGES } = await import('@hermes/api');
+
+        const dedupeStorageKey = `hermes-project-dedupe-v1-${userId}`;
+        try {
+          if (!localStorage.getItem(dedupeStorageKey)) {
+            await cleanupDefaultProjectDuplicates();
+            localStorage.setItem(dedupeStorageKey, '1');
+          }
+        } catch {
+          // Non-fatal: proceed without one-time dedupe marker.
+        }
+
         const projects = await fetchWritingProjects();
         if (cancelled) return;
 
@@ -62,8 +74,8 @@ function RedirectToLatestProject() {
           } catch { /* malformed localStorage — fall through to default seed */ }
 
           let seededCustomPages = false;
-          try { await seedWelcomeProject(session.user.id, customPages); seededCustomPages = !!customPages; } catch { /* continue */ }
-          try { await seedEssayProject(session.user.id); } catch { /* continue */ }
+          try { await seedWelcomeProject(userId, customPages); seededCustomPages = !!customPages; } catch { /* continue */ }
+          try { await seedEssayProject(userId); } catch { /* continue */ }
           if (cancelled) return;
 
           // Clean up localStorage after successful migration
@@ -71,10 +83,13 @@ function RedirectToLatestProject() {
             try { localStorage.removeItem('hermes-welcome-pages'); } catch { /* ignore */ }
           }
 
-          // Create a starter project and land on it
-          const starterProject = await createWritingProject(
+          const refreshedProjects = await fetchWritingProjects();
+          const existingStarter = refreshedProjects.find((p) => p.title === 'My First Project');
+
+          // Create a starter project only once per account setup.
+          const starterProject = existingStarter || await createWritingProject(
             'My First Project',
-            session.user.id,
+            userId,
             {
               subtitle: 'A brief description of your piece',
               pages: {
@@ -91,7 +106,7 @@ function RedirectToLatestProject() {
     })();
 
     return () => { cancelled = true; };
-  }, [session, navigate]);
+  }, [userId, navigate]);
 
   // Non-logged-in users get the editor with no project
   if (fallback) return <FocusPage />;
