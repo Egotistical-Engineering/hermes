@@ -1,6 +1,5 @@
 import { createContext, useState, useEffect } from 'react';
 import posthog from 'posthog-js';
-import { activateTrial } from '@hermes/api';
 import { supabase, initOfflineAdapter } from '../lib/supabase';
 import { IS_TAURI } from '../lib/platform';
 
@@ -19,7 +18,7 @@ export default function AuthProvider({ children }) {
       const desc = params.get('error_description');
       if (desc) {
         setAuthError(desc.includes('Signups not allowed')
-          ? 'This site is invite-only. Contact the admin for access.'
+          ? 'Signups are currently disabled. Please try again later.'
           : desc);
         // Clean the hash so the error doesn't persist on refresh
         window.history.replaceState(null, '', window.location.pathname);
@@ -79,20 +78,6 @@ export default function AuthProvider({ children }) {
 
     return () => subscription.unsubscribe();
   }, []);
-
-  // Activate pending trial after Google OAuth redirect
-  useEffect(() => {
-    if (!session?.access_token) return;
-    const pending = sessionStorage.getItem('pendingTrialDays');
-    if (!pending) return;
-    sessionStorage.removeItem('pendingTrialDays');
-    const days = parseInt(pending, 10);
-    if (days > 0) {
-      activateTrial(days, session.access_token).catch(() => {
-        // Non-fatal — trial activation is best-effort
-      });
-    }
-  }, [session?.access_token]);
 
   const signIn = (email, password) =>
     supabase.auth.signInWithPassword({ email, password });

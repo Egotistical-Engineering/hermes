@@ -81,10 +81,7 @@ server/src/
 
 **Auth** (`server/src/routes/auth.ts`):
 
-- `POST /api/auth/validate-invite` — check if invite code is valid (no usage increment)
-- `POST /api/auth/signup` — create user with invite code (email/password, auto-confirmed); always stamps `trial_expires_at` (defaults to `FREE_TIER_DAYS`)
-- `POST /api/auth/use-invite` — consume invite code use (for Google OAuth flow); returns `trialDays` (defaults to `FREE_TIER_DAYS`)
-- `POST /api/auth/activate-trial` — activate trial for current user (Google OAuth flow, auth required, idempotent)
+- `POST /api/auth/signup` — create user account (email/password, auto-confirmed); stamps `trial_expires_at` (defaults to `FREE_TIER_DAYS`)
 
 **Billing** (`server/src/routes/stripe.ts` + `server/src/routes/usage.ts`):
 
@@ -162,43 +159,30 @@ Production credentials are **never** stored in local env files. They are only se
 
 ## Auth
 
-Email/password via Supabase Auth, gated behind invite codes. `AuthContext` provides `session`, `signIn`, `signOut`. Writing pages are wrapped in `RequireAuth`.
+Email/password or Google OAuth via Supabase Auth. No invite codes required — open signup. `AuthContext` provides `session`, `signIn`, `signOut`. Writing pages are wrapped in `RequireAuth`.
 
-### Invite code signup flow
+### Signup flow
 
-Signup requires a valid invite code. The flow:
-
-1. User enters invite code → validated via `POST /api/auth/validate-invite`
-2. User fills email/password → account created via `POST /api/auth/signup` (auto-confirmed)
-3. Google OAuth: invite code consumed via `POST /api/auth/use-invite` before redirect
-
-Users created with invite codes are auto-confirmed (no email verification needed). The `invite_codes` table has no RLS policies — only the server (service key) accesses it.
+- **Email/password**: User fills email + password → `POST /api/auth/signup` creates account (auto-confirmed via `admin.createUser()`) → auto-login
+- **Google OAuth**: Standard Supabase OAuth flow → usage gate auto-creates profile with `trial_expires_at` on first request
 
 ### Free tier and limits
 
 Two tiers: **Pro** (300/month) and **Free** (7 days, 10 messages/day). There is no separate trial tier.
 
 **How it works:**
-- On signup, the server always stamps `trial_expires_at` on `user_profiles` (defaults to `FREE_TIER_DAYS = 7`)
-- The usage gate checks: Pro → Free (uses `trial_expires_at` as expiry, falls back to `created_at + FREE_TIER_DAYS`)
+- On email/password signup, the server stamps `trial_expires_at` on `user_profiles` (defaults to `FREE_TIER_DAYS = 7`)
+- Google OAuth users get `trial_expires_at` stamped by the usage gate on first request (falls back to `created_at + FREE_TIER_DAYS`)
 - Free users get `FREE_DAILY_LIMIT` (10/day). After `trial_expires_at`, they're locked out (`FREE_EXPIRED`)
 - No cron job — expiry is checked lazily on every request
 - Limits are defined in `server/src/lib/limits.ts`
-- Invite codes with `trial_days` override the default duration (e.g. `trial_days = 30` gives 30 days instead of 7)
-
-**Google OAuth path:** The frontend stores `trialDays` in `sessionStorage` after consuming the invite code, then `AuthContext` calls `POST /api/auth/activate-trial` after the OAuth redirect completes (idempotent). `use-invite` returns `FREE_TIER_DAYS` as default when the invite code has no `trial_days`.
-
-**Invite codes are NOT seeded in migrations** — this is an open-source repo. Insert them manually via the Supabase SQL editor:
-```sql
-INSERT INTO public.invite_codes (code, max_uses, trial_days)
-  VALUES ('your-code', 50, 7);
-```
 
 **Edge cases:**
 - Pro subscription takes priority over free tier (`isPro` checked first)
 - Expired free tier: `trial_expires_at` stays as audit trail, user sees upgrade prompt
-- `activate-trial` is idempotent — skips if `trial_expires_at` already set
 - Free users do NOT get MCP access (`hasMcpAccess = isPro || isAdmin`)
+
+**Legacy:** The `invite_codes` table and related DB functions still exist but are no longer used by the application.
 
 ### Server env vars
 
@@ -292,7 +276,7 @@ Add the route to `apps/web/src/App.jsx`. Wrap in `RequireAuth` if auth is requir
 
 - Dev server is port **5176** (not 5173)
 - Local dev and staging both use **hermes-staging** Supabase — not production
-- Invite-code signups are **auto-confirmed** via `admin.createUser()` — no email verification needed
+- Email/password signups are **auto-confirmed** via `admin.createUser()` — no email verification needed
 - **Client-side Supabase queries on `projects` must always filter by `user_id`** — the "Anyone can read published projects" RLS policy will leak other users' published projects into query results if you don't
 - Toast notifications use theme tokens for consistent appearance
 - Test dev credentials (email/password) are in `server/.env`
