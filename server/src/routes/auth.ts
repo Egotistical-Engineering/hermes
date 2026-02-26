@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 import logger from '../lib/logger.js';
+import { FREE_TIER_DAYS } from '../lib/limits.js';
 
 const router = Router();
 
@@ -129,9 +130,10 @@ router.post('/signup', async (req: Request, res: Response) => {
     return;
   }
 
-  // If trial code, stamp trial_expires_at on the new user's profile
-  if (trialDays > 0 && createData.user) {
-    const expiresAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
+  // Stamp trial_expires_at on every new user (default to FREE_TIER_DAYS if no trial code)
+  if (createData.user) {
+    const effectiveDays = trialDays > 0 ? trialDays : FREE_TIER_DAYS;
+    const expiresAt = new Date(Date.now() + effectiveDays * 24 * 60 * 60 * 1000).toISOString();
     const { error: updateError } = await supabase
       .from('user_profiles')
       .update({ trial_expires_at: expiresAt })
@@ -183,7 +185,7 @@ router.post('/use-invite', useInviteLimit, async (req: Request, res: Response) =
     return;
   }
 
-  const trialDays = trialResult as number;
+  const trialDays = (trialResult as number) || FREE_TIER_DAYS;
   res.json({ success: true, trialDays });
 });
 

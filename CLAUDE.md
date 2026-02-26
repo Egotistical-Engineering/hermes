@@ -82,8 +82,8 @@ server/src/
 **Auth** (`server/src/routes/auth.ts`):
 
 - `POST /api/auth/validate-invite` — check if invite code is valid (no usage increment)
-- `POST /api/auth/signup` — create user with invite code (email/password, auto-confirmed); stamps `trial_expires_at` if trial code
-- `POST /api/auth/use-invite` — consume invite code use (for Google OAuth flow); returns `trialDays`
+- `POST /api/auth/signup` — create user with invite code (email/password, auto-confirmed); always stamps `trial_expires_at` (defaults to `FREE_TIER_DAYS`)
+- `POST /api/auth/use-invite` — consume invite code use (for Google OAuth flow); returns `trialDays` (defaults to `FREE_TIER_DAYS`)
 - `POST /api/auth/activate-trial` — activate trial for current user (Google OAuth flow, auth required, idempotent)
 
 **Billing** (`server/src/routes/stripe.ts` + `server/src/routes/usage.ts`):
@@ -174,30 +174,31 @@ Signup requires a valid invite code. The flow:
 
 Users created with invite codes are auto-confirmed (no email verification needed). The `invite_codes` table has no RLS policies — only the server (service key) accesses it.
 
-### Trial invite codes
+### Free tier and limits
 
-Some invite codes grant a time-limited trial (e.g. 30 days, 100 messages/month). Trial codes have a non-null `trial_days` column in `invite_codes`. The system uses `use_invite_code_v2()` which returns `-1` (invalid), `0` (standard code), or `N > 0` (trial days).
+Two tiers: **Pro** (300/month) and **Free** (7 days, 10 messages/day). There is no separate trial tier.
 
 **How it works:**
-- On signup, if `trialDays > 0`, the server stamps `trial_expires_at` on `user_profiles`
-- The usage gate checks: Pro → Trial (active `trial_expires_at`) → Free, in that order
-- Trial users get `TRIAL_MONTHLY_LIMIT` (100/month). Expired trials fall through to Free (10/day)
+- On signup, the server always stamps `trial_expires_at` on `user_profiles` (defaults to `FREE_TIER_DAYS = 7`)
+- The usage gate checks: Pro → Free (uses `trial_expires_at` as expiry, falls back to `created_at + FREE_TIER_DAYS`)
+- Free users get `FREE_DAILY_LIMIT` (10/day). After `trial_expires_at`, they're locked out (`FREE_EXPIRED`)
 - No cron job — expiry is checked lazily on every request
 - Limits are defined in `server/src/lib/limits.ts`
+- Invite codes with `trial_days` override the default duration (e.g. `trial_days = 30` gives 30 days instead of 7)
 
-**Google OAuth path:** The frontend stores `trialDays` in `sessionStorage` after consuming the invite code, then `AuthContext` calls `POST /api/auth/activate-trial` after the OAuth redirect completes (idempotent).
+**Google OAuth path:** The frontend stores `trialDays` in `sessionStorage` after consuming the invite code, then `AuthContext` calls `POST /api/auth/activate-trial` after the OAuth redirect completes (idempotent). `use-invite` returns `FREE_TIER_DAYS` as default when the invite code has no `trial_days`.
 
-**Trial codes are NOT seeded in migrations** — this is an open-source repo. Insert them manually via the Supabase SQL editor:
+**Invite codes are NOT seeded in migrations** — this is an open-source repo. Insert them manually via the Supabase SQL editor:
 ```sql
 INSERT INTO public.invite_codes (code, max_uses, trial_days)
-  VALUES ('your-code', 50, 30);
+  VALUES ('your-code', 50, 7);
 ```
 
 **Edge cases:**
-- Pro subscription takes priority over active trial (`isPro` checked first)
-- Expired trial = Free tier. `trial_expires_at` stays as audit trail
+- Pro subscription takes priority over free tier (`isPro` checked first)
+- Expired free tier: `trial_expires_at` stays as audit trail, user sees upgrade prompt
 - `activate-trial` is idempotent — skips if `trial_expires_at` already set
-- Trial users do NOT get MCP access (`hasMcpAccess = isPro || isAdmin`)
+- Free users do NOT get MCP access (`hasMcpAccess = isPro || isAdmin`)
 
 ### Server env vars
 
