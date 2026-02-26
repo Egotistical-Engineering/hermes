@@ -9,6 +9,7 @@ export {
   createWritingProject,
   updateWritingProject,
   deleteWritingProject,
+  cleanupDefaultProjectDuplicates,
   seedEssayProject,
   seedWelcomeProject,
   saveProjectContent,

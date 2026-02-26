@@ -8,6 +8,9 @@ import { WELCOME_TITLE, WELCOME_PAGES } from './welcome-seed';
 
 const CACHE_TTL = 30_000; // 30 seconds
 const MAX_CACHE_ENTRIES = 50;
+const DUPLICATE_CLEANUP_WINDOW_MS = 15 * 60 * 1000;
+const STARTER_TITLE = 'My First Project';
+const DUPLICATE_CLEANUP_TITLES = new Set([WELCOME_TITLE, ESSAY_TITLE, STARTER_TITLE]);
 
 type CacheEntry<T> = { data: T; timestamp: number };
 
@@ -40,6 +43,24 @@ function invalidateProject(projectId: string): void {
 
 function invalidateConversation(projectId: string): void {
   conversationCache.delete(projectId);
+}
+
+function stableSerialize(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
+  const entries = Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => a.localeCompare(b));
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableSerialize(v)}`).join(',')}}`;
+}
+
+function projectContentFingerprint(project: WritingProject): string {
+  return [
+    project.title,
+    project.subtitle || '',
+    project.status,
+    project.content || '',
+    stableSerialize(project.pages || {}),
+  ].join('|');
 }
 
 export type WritingStatus =
@@ -259,7 +280,66 @@ export async function deleteWritingProject(projectId: string): Promise<void> {
   invalidateConversation(projectId);
 }
 
+export async function cleanupDefaultProjectDuplicates(): Promise<number> {
+  const projects = await fetchWritingProjects();
+  const bySignature = new Map<string, WritingProject[]>();
+
+  for (const project of projects) {
+    if (!DUPLICATE_CLEANUP_TITLES.has(project.title)) continue;
+    const signature = `${project.title}::${projectContentFingerprint(project)}`;
+    const group = bySignature.get(signature);
+    if (group) group.push(project);
+    else bySignature.set(signature, [project]);
+  }
+
+  const idsToDelete: string[] = [];
+
+  for (const group of bySignature.values()) {
+    if (group.length < 2) continue;
+    if (group.some((p) => p.published || p.shortId || p.slug)) continue;
+
+    const createdTimes = group.map((p) => Date.parse(p.createdAt));
+    if (createdTimes.some((t) => Number.isNaN(t))) continue;
+
+    const oldest = Math.min(...createdTimes);
+    const newest = Math.max(...createdTimes);
+    if (newest - oldest > DUPLICATE_CLEANUP_WINDOW_MS) continue;
+
+    const [keep, ...dupes] = [...group].sort((a, b) => {
+      const byUpdatedAt = Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
+      if (byUpdatedAt !== 0) return byUpdatedAt;
+      return Date.parse(b.createdAt) - Date.parse(a.createdAt);
+    });
+
+    if (!keep) continue;
+    idsToDelete.push(...dupes.map((p) => p.id));
+  }
+
+  for (const id of idsToDelete) {
+    await deleteWritingProject(id);
+  }
+
+  return idsToDelete.length;
+}
+
+async function findProjectByTitle(userId: string, title: string): Promise<WritingProject | null> {
+  const { data, error } = await getSupabase()
+    .from('projects')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('title', title)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle<WritingProjectRow>();
+
+  if (error) throw error;
+  return data ? toWritingProject(data) : null;
+}
+
 export async function seedEssayProject(userId: string): Promise<WritingProject> {
+  const existing = await findProjectByTitle(userId, ESSAY_TITLE);
+  if (existing) return existing;
+
   const { data: project, error: projErr } = await getSupabase()
     .from('projects')
     .insert({ title: ESSAY_TITLE, subtitle: ESSAY_SUBTITLE, user_id: userId, status: 'complete', pages: ESSAY_PAGES })
@@ -276,6 +356,9 @@ export async function seedWelcomeProject(
   userId: string,
   customPages?: Record<string, string>,
 ): Promise<WritingProject> {
+  const existing = await findProjectByTitle(userId, WELCOME_TITLE);
+  if (existing) return existing;
+
   const { data, error } = await getSupabase()
     .from('projects')
     .insert({

@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import posthog from 'posthog-js';
-import { fetchWritingProjects, fetchWritingProject, createWritingProject, updateWritingProject, deleteWritingProject } from '@hermes/api';
+import {
+  fetchWritingProjects,
+  fetchWritingProject,
+  createWritingProject,
+  updateWritingProject,
+  deleteWritingProject,
+  cleanupDefaultProjectDuplicates,
+} from '@hermes/api';
 import { relativeTime } from '@hermes/domain';
 import useAuth from '../../hooks/useAuth';
 import styles from './ProjectSwitcher.module.css';
@@ -30,11 +37,24 @@ export default function ProjectSwitcher({ projectId, projectTitle, onDropdownOpe
     setOpen(true);
     onDropdownOpen?.();
     if (projects === null) {
-      fetchWritingProjects()
-        .then(setProjects)
-        .catch(() => setProjects([]));
+      const dedupeStorageKey = session?.user?.id ? `hermes-project-dedupe-v1-${session.user.id}` : null;
+
+      (async () => {
+        try {
+          if (dedupeStorageKey && !localStorage.getItem(dedupeStorageKey)) {
+            await cleanupDefaultProjectDuplicates();
+            localStorage.setItem(dedupeStorageKey, '1');
+          }
+        } catch {
+          // Non-fatal: still fetch projects below.
+        }
+
+        fetchWritingProjects()
+          .then(setProjects)
+          .catch(() => setProjects([]));
+      })();
     }
-  }, [projects, onDropdownOpen]);
+  }, [projects, onDropdownOpen, session?.user?.id]);
 
   const closeDropdown = useCallback(() => {
     setOpen(false);
