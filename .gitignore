@@ -41,3 +41,4 @@ DESIGN_SYSTEM.md
 # Tauri build artifacts
 apps/native/src-tauri/target/
 apps/native/src-tauri/gen/
+apps/native/src-tauri/binaries/

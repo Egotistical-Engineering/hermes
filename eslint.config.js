@@ -34,7 +34,7 @@ export default defineConfig([
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': ['warn', {
-        allowExportNames: ['AuthContext', 'ChatContext'],
+        allowExportNames: ['ChatContext'],
       }],
       // Disable noisy React 19 compiler rules
       'react-hooks/immutability': 'off',

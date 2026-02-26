@@ -8,6 +8,15 @@
     "store:default",
     "shell:allow-open",
     "os:default",
-    "deep-link:default"
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "binaries/hermes-server",
+          "sidecar": true,
+          "args": false
+        }
+      ]
+    }
   ]
 }

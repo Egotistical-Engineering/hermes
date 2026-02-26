@@ -1,12 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
-import posthog from 'posthog-js'
 import './index.css'
 import App from './App.jsx'
-import './lib/supabase'
-import AuthProvider from './contexts/AuthContext'
 
 Sentry.init({
   dsn: import.meta.env.VITE_SENTRY_DSN,
@@ -14,29 +10,9 @@ Sentry.init({
   enabled: import.meta.env.PROD,
   integrations: [
     Sentry.browserTracingIntegration(),
-    Sentry.replayIntegration({
-      maskAllText: true,
-      blockAllMedia: false,
-    }),
   ],
   tracesSampleRate: 0.2,
-  replaysSessionSampleRate: 0,
-  replaysOnErrorSampleRate: 1.0,
 })
-
-if (import.meta.env.VITE_POSTHOG_KEY) {
-  posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
-    api_host: import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com',
-    autocapture: true,
-    capture_pageview: true,
-    capture_pageleave: true,
-    session_recording: {
-      maskAllInputs: true,
-      maskTextSelector: '.ProseMirror',
-    },
-    respect_dnt: true,
-  })
-}
 
 function SentryFallback() {
   return (
@@ -52,11 +28,7 @@ function SentryFallback() {
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <Sentry.ErrorBoundary fallback={<SentryFallback />}>
-      <BrowserRouter>
-        <AuthProvider>
-            <App />
-        </AuthProvider>
-      </BrowserRouter>
+      <App />
     </Sentry.ErrorBoundary>
   </StrictMode>,
 )

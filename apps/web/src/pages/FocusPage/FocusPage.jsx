@@ -1,27 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Sentry from '@sentry/react';
-import posthog from 'posthog-js';
-import { useParams, useSearchParams } from 'react-router-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import { Markdown } from '@tiptap/markdown';
 import { Slice } from '@tiptap/pm/model';
-import { fetchWritingProject, saveProjectPages, saveProjectHighlights, updateWritingProject, updatePublishSettings, generateSlug, fetchCurrentUsage } from '@hermes/api';
 import { IS_MOBILE } from '../../lib/platform';
-import useAuth from '../../hooks/useAuth';
 import useFocusMode from './useFocusMode';
 import useHighlights, { getDocFlatText, flatOffsetToPos } from './useHighlights';
 import useInlineLink from './useInlineLink';
 import LinkTooltip from './LinkTooltip';
 import FocusChatWindow from './FocusChatWindow';
 import HighlightPopover from './HighlightPopover';
-import PageTabs, { EMPTY_PAGES, TAB_KEYS } from './PageTabs';
-import ProjectSwitcher from './ProjectSwitcher';
-import ShareButton from './ShareButton';
-import UserMenu from './UserMenu';
-import SignupToast from '../../components/SignupToast/SignupToast';
+import PageTabs, { EMPTY_PAGES } from './PageTabs';
+import SettingsPanel from './SettingsPanel';
 import styles from './FocusPage.module.css';
 
 function looksLikeMarkdown(text) {
@@ -34,68 +27,27 @@ function getWordCount(text) {
   return trimmed.split(/\s+/).length;
 }
 
-export default function FocusPage() {
-  const { projectId } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { session } = useAuth();
-  const [projectTitle, setProjectTitle] = useState('');
-  const [projectSubtitle, setProjectSubtitle] = useState('');
-  const [publishState, setPublishState] = useState({
-    published: false,
-    shortId: null,
-    slug: null,
-    authorName: '',
-    publishedTabs: [],
-    publishedAt: null,
-  });
-  const [settingsVisible, setSettingsVisible] = useState(false);
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+const STORAGE_KEY = 'hermes-focus-pages';
 
-  // Track online/offline status
-  useEffect(() => {
-    const goOnline = () => setIsOffline(false);
-    const goOffline = () => setIsOffline(true);
-    window.addEventListener('online', goOnline);
-    window.addEventListener('offline', goOffline);
-    return () => {
-      window.removeEventListener('online', goOnline);
-      window.removeEventListener('offline', goOffline);
-    };
-  }, []);
-  const [_dropdownOpen, setDropdownOpen] = useState(false);
+export default function FocusPage() {
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const shortcutsRef = useRef(null);
   const [actionsOpen, setActionsOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [postCopied, setPostCopied] = useState(false);
   const actionsRef = useRef(null);
   const [wordCount, setWordCount] = useState(0);
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [titleEditValue, setTitleEditValue] = useState('');
-  const [editingSubtitle, setEditingSubtitle] = useState(false);
-  const [subtitleEditValue, setSubtitleEditValue] = useState('');
+  const [postCopied, setPostCopied] = useState(false);
   const [activeTab, setActiveTab] = useState('coral');
   const [pages, setPages] = useState({ ...EMPTY_PAGES });
   const [initialLoaded, setInitialLoaded] = useState(false);
   const saveTimerRef = useRef(null);
-  const supabaseSaveTimerRef = useRef(null);
-  const highlightSaveTimerRef = useRef(null);
   const switchingRef = useRef(false);
   const pagesRef = useRef(pages);
   const activeTabRef = useRef(activeTab);
-  const storageKey = projectId ? `hermes-focus-pages-${projectId}` : 'hermes-welcome-pages';
 
-  // Keep refs in sync for use in onUpdate callback
-  useEffect(() => {
-    pagesRef.current = pages;
-  }, [pages]);
-  useEffect(() => {
-    activeTabRef.current = activeTab;
-  }, [activeTab]);
-
-  const isLoggedIn = !!session;
-
-  // Title and publish state are now loaded from the single fetch in the content-loading effect below.
+  useEffect(() => { pagesRef.current = pages; }, [pages]);
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
   const {
     focusMode,
@@ -171,19 +123,11 @@ export default function FocusPage() {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
         try {
-          localStorage.setItem(storageKey, JSON.stringify(pagesRef.current));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(pagesRef.current));
         } catch {
           // localStorage full or unavailable
         }
       }, 500);
-
-      // Debounced Supabase save (2s, authenticated only)
-      if (isLoggedIn && projectId) {
-        if (supabaseSaveTimerRef.current) clearTimeout(supabaseSaveTimerRef.current);
-        supabaseSaveTimerRef.current = setTimeout(() => {
-          saveProjectPages(projectId, pagesRef.current).catch(() => {});
-        }, 2000);
-      }
     },
   });
 
@@ -207,133 +151,45 @@ export default function FocusPage() {
     return () => { if (destroy) destroy(); };
   }, []);
 
-  // Load content: Supabase first (if logged in), then localStorage fallback
+  // Load content from localStorage
   useEffect(() => {
     if (!editor) return;
     if (initialLoaded) return;
 
-    let cancelled = false;
+    let loadedPages = null;
 
-    async function loadContent() {
-      let loadedPages = null;
-
-      // Try Supabase first if logged in
-      if (isLoggedIn && projectId) {
-        try {
-          const project = await fetchWritingProject(projectId);
-          if (cancelled) return;
-
-          // Set title and publish state from the same fetch
-          if (project) {
-            if (project.title) setProjectTitle(project.title);
-            setProjectSubtitle(project.subtitle || '');
-            setPublishState({
-              published: project.published,
-              shortId: project.shortId,
-              slug: project.slug,
-              authorName: project.authorName,
-              publishedTabs: project.publishedTabs,
-              publishedAt: project.publishedAt,
-            });
-          }
-
-          // Use pages if they have content, else migrate from content field
-          const hasPages = project?.pages && Object.values(project.pages).some((v) => v);
-          if (hasPages) {
-            loadedPages = { ...EMPTY_PAGES, ...project.pages };
-          } else if (project?.content) {
-            loadedPages = { ...EMPTY_PAGES, coral: project.content };
-          }
-
-          // Load highlights from project
-          if (project?.highlights && project.highlights.length > 0) {
-            replaceHighlights(project.highlights);
-          }
-
-          if (loadedPages) {
-            setPages(loadedPages);
-            pagesRef.current = loadedPages;
-            editor.commands.setContent(loadedPages[activeTab] || '', { contentType: 'markdown' });
-            setWordCount(getWordCount(editor.getText()));
-            setInitialLoaded(true);
-            return;
-          }
-        } catch {
-          // Fall through to localStorage
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          loadedPages = { ...EMPTY_PAGES, ...parsed };
         }
       }
+    } catch {
+      // localStorage unavailable
+    }
 
-      if (cancelled) return;
-
-      // localStorage fallback
-      try {
-        const saved = localStorage.getItem(storageKey);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed && typeof parsed === 'object') {
-            loadedPages = { ...EMPTY_PAGES, ...parsed };
-          }
-        }
-      } catch {
-        // Try legacy single-content key
-        try {
-          const legacy = localStorage.getItem(`hermes-focus-${projectId}`);
-          if (legacy) {
-            loadedPages = { ...EMPTY_PAGES, coral: legacy };
-          }
-        } catch {
-          // localStorage unavailable
-        }
-      }
-
-      // No localStorage found — seed with Welcome content for unauthenticated users
-      if (!loadedPages && !isLoggedIn) {
-        const { WELCOME_PAGES, WELCOME_HIGHLIGHTS } = await import('@hermes/api');
-        loadedPages = { ...EMPTY_PAGES, ...WELCOME_PAGES };
-        if (WELCOME_HIGHLIGHTS) replaceHighlights(WELCOME_HIGHLIGHTS);
-      }
-
-      // Set title for unauth Welcome experience
-      if (!isLoggedIn && !projectId) {
-        setProjectTitle('Welcome to Hermes');
-      }
-
-      if (loadedPages) {
-        setPages(loadedPages);
-        pagesRef.current = loadedPages;
-        editor.commands.setContent(loadedPages[activeTab] || '', { contentType: 'markdown' });
+    // No localStorage found — seed with Welcome content
+    if (!loadedPages) {
+      import('@hermes/api').then(({ WELCOME_PAGES, WELCOME_HIGHLIGHTS }) => {
+        const seeded = { ...EMPTY_PAGES, ...WELCOME_PAGES };
+        setPages(seeded);
+        pagesRef.current = seeded;
+        editor.commands.setContent(seeded[activeTab] || '', { contentType: 'markdown' });
         setWordCount(getWordCount(editor.getText()));
-      }
-
-      setInitialLoaded(true);
+        if (WELCOME_HIGHLIGHTS) replaceHighlights(WELCOME_HIGHLIGHTS);
+        setInitialLoaded(true);
+      });
+      return;
     }
 
-    loadContent();
-
-    return () => { cancelled = true; };
-  }, [editor, projectId, isLoggedIn, storageKey, initialLoaded, activeTab, replaceHighlights]);
-
-  // Reset when projectId changes
-  useEffect(() => {
-    setInitialLoaded(false);
-    setActiveTab('coral');
-    setPages({ ...EMPTY_PAGES });
-    pagesRef.current = { ...EMPTY_PAGES };
-    if (editor) {
-      editor.commands.clearContent();
-      setWordCount(0);
-    }
-    replaceHighlights([]);
-  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Persist highlights to Supabase when they change
-  useEffect(() => {
-    if (!isLoggedIn || !projectId || !initialLoaded) return;
-    if (highlightSaveTimerRef.current) clearTimeout(highlightSaveTimerRef.current);
-    highlightSaveTimerRef.current = setTimeout(() => {
-      saveProjectHighlights(projectId, highlights).catch(() => {});
-    }, 1500);
-  }, [highlights, projectId, isLoggedIn, initialLoaded]);
+    setPages(loadedPages);
+    pagesRef.current = loadedPages;
+    editor.commands.setContent(loadedPages[activeTab] || '', { contentType: 'markdown' });
+    setWordCount(getWordCount(editor.getText()));
+    setInitialLoaded(true);
+  }, [editor, initialLoaded, activeTab, replaceHighlights]);
 
   // Handle new highlights from chat
   const handleHighlights = useCallback((newHighlights) => {
@@ -344,7 +200,6 @@ export default function FocusPage() {
   const handleAcceptEdit = useCallback((highlight) => {
     if (!editor || !highlight.suggestedEdit) return;
 
-    // Search in flat text (matches what the AI sees after stripMarkdown)
     const flatText = getDocFlatText(editor.state.doc);
     const idx = flatText.indexOf(highlight.matchText);
     if (idx !== -1) {
@@ -355,24 +210,19 @@ export default function FocusPage() {
       }
     }
 
-    posthog.capture('highlight_accepted', { type: highlight.type });
     dismissHighlight(highlight.id);
   }, [editor, dismissHighlight]);
 
-  // Stable callback for HighlightPopover onDismiss
   const handleDismissHighlight = useCallback((id) => {
     if (id) {
-      const h = highlights.find(hl => hl.id === id);
-      posthog.capture('highlight_dismissed', { type: h?.type });
       dismissHighlight(id);
     } else {
       clearHighlight();
     }
-  }, [highlights, dismissHighlight, clearHighlight]);
+  }, [dismissHighlight, clearHighlight]);
 
   // Reply from highlight: focus chat with context
   const handleReply = useCallback((highlight) => {
-    posthog.capture('highlight_replied', { type: highlight.type });
     const prefill = `Re: "${highlight.matchText.slice(0, 50)}${highlight.matchText.length > 50 ? '...' : ''}" — `;
     window.__hermesChatFocus?.(prefill);
     clearHighlight();
@@ -386,17 +236,11 @@ export default function FocusPage() {
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       try {
-        localStorage.setItem(storageKey, JSON.stringify(pagesRef.current));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(pagesRef.current));
       } catch { /* */ }
     }
-    if (supabaseSaveTimerRef.current) {
-      clearTimeout(supabaseSaveTimerRef.current);
-      if (isLoggedIn && projectId) {
-        saveProjectPages(projectId, pagesRef.current).catch(() => {});
-      }
-    }
 
-    // Save current content into pages (empty editor → empty string)
+    // Save current content into pages
     const hasText = editor.getText().trim().length > 0;
     const currentMd = hasText ? editor.getMarkdown() : '';
     const updated = { ...pagesRef.current, [activeTab]: currentMd };
@@ -412,112 +256,9 @@ export default function FocusPage() {
 
     setWordCount(getWordCount(editor.getText()));
     clearHighlight();
+  }, [editor, activeTab, clearHighlight]);
 
-    const tabsUsed = Object.values(pagesRef.current).filter(v => v?.trim()).length;
-    posthog.capture('tab_switched', {
-      from_tab: activeTab,
-      to_tab: newTab,
-      tabs_with_content: tabsUsed,
-    });
-  }, [editor, activeTab, storageKey, isLoggedIn, projectId, clearHighlight]);
-
-  const handlePublishChange = useCallback((updates) => {
-    setPublishState((prev) => ({ ...prev, ...updates }));
-  }, []);
-
-  // Poll for upgrade confirmation when returning from Stripe
-  useEffect(() => {
-    if (searchParams.get('upgraded') !== 'true' || !session?.access_token) return;
-
-    let attempts = 0;
-    const maxAttempts = 15;
-    const interval = setInterval(async () => {
-      attempts++;
-      try {
-        const usage = await fetchCurrentUsage(session.access_token);
-        if (usage.plan === 'pro') {
-          clearInterval(interval);
-          setSearchParams((prev) => { prev.delete('upgraded'); return prev; }, { replace: true });
-        }
-      } catch {
-        // Ignore errors during polling
-      }
-      if (attempts >= maxAttempts) {
-        clearInterval(interval);
-        setSearchParams((prev) => { prev.delete('upgraded'); return prev; }, { replace: true });
-      }
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [searchParams, session?.access_token, setSearchParams]);
-
-  // Inline title editing
-  const startEditingTitle = useCallback(() => {
-    setTitleEditValue(projectTitle);
-    setEditingTitle(true);
-  }, [projectTitle]);
-
-  const commitTitle = useCallback(async (value) => {
-    const trimmed = value.trim();
-    setEditingTitle(false);
-    if (!trimmed || trimmed === projectTitle) return;
-
-    setProjectTitle(trimmed);
-    try {
-      await updateWritingProject(projectId, { title: trimmed });
-      if (publishState.published) {
-        const slug = generateSlug(trimmed);
-        await updatePublishSettings(projectId, { slug });
-        handlePublishChange({ slug });
-      }
-    } catch {
-      // Revert on failure
-      setProjectTitle(projectTitle);
-    }
-  }, [projectId, projectTitle, publishState.published, handlePublishChange]);
-
-  const handleTitleKeyDown = useCallback((e) => {
-    if (e.key === 'Enter') { e.preventDefault(); commitTitle(titleEditValue); }
-    if (e.key === 'Escape') { e.preventDefault(); setEditingTitle(false); }
-  }, [commitTitle, titleEditValue]);
-
-  const handleTitleBlur = useCallback(() => {
-    commitTitle(titleEditValue);
-  }, [commitTitle, titleEditValue]);
-
-  // Inline subtitle editing
-  const startEditingSubtitle = useCallback(() => {
-    setSubtitleEditValue(projectSubtitle);
-    setEditingSubtitle(true);
-  }, [projectSubtitle]);
-
-  const commitSubtitle = useCallback(async (value) => {
-    const trimmed = value.trim();
-    setEditingSubtitle(false);
-    if (trimmed === projectSubtitle) return;
-
-    setProjectSubtitle(trimmed);
-    try {
-      await updateWritingProject(projectId, { subtitle: trimmed });
-      posthog.capture('subtitle_updated', {
-        action: projectSubtitle ? 'edited' : 'added',
-        is_empty: !trimmed,
-      });
-    } catch {
-      setProjectSubtitle(projectSubtitle);
-    }
-  }, [projectId, projectSubtitle]);
-
-  const handleSubtitleKeyDown = useCallback((e) => {
-    if (e.key === 'Enter') { e.preventDefault(); commitSubtitle(subtitleEditValue); }
-    if (e.key === 'Escape') { e.preventDefault(); setEditingSubtitle(false); }
-  }, [commitSubtitle, subtitleEditValue]);
-
-  const handleSubtitleBlur = useCallback(() => {
-    commitSubtitle(subtitleEditValue);
-  }, [commitSubtitle, subtitleEditValue]);
-
-  // Stable callback for child components to read pages on-demand (avoids re-renders on every keystroke)
+  // Stable callback for child components to read pages on-demand
   const getPages = useCallback(() => pagesRef.current, []);
 
   // Close shortcuts popover on click outside
@@ -586,6 +327,13 @@ export default function FocusPage() {
     </svg>
   );
 
+  const gearIcon = (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="2.5" />
+      <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M2.9 2.9l1.1 1.1M12 12l1.1 1.1M2.9 13.1l1.1-1.1M12 4l1.1-1.1" />
+    </svg>
+  );
+
   return (
     <div className={styles.page}>
       {/* Floating toggle — only visible when bar is hidden */}
@@ -604,22 +352,9 @@ export default function FocusPage() {
         <div
           className={`${styles.settingsBar} ${settingsVisible ? styles.settingsBarVisible : ''}`}
         >
-          {isLoggedIn && projectId ? (
-            <ProjectSwitcher
-              projectId={projectId}
-              projectTitle={projectTitle}
-              onDropdownOpen={() => setDropdownOpen(true)}
-              onDropdownClose={() => setDropdownOpen(false)}
-              onProjectRenamed={(id, newTitle) => {
-                if (id === projectId) setProjectTitle(newTitle);
-              }}
-            />
-          ) : (
-            <span className={styles.brandLabel}>{projectTitle || 'Hermes'}</span>
-          )}
+          <span className={styles.brandLabel}>Hermes</span>
 
           <div className={styles.settingsRight}>
-            {isOffline && <span className={styles.offlineBadge}>Offline</span>}
             <span className={styles.wordCount}>
               {wordCount} {wordCount === 1 ? 'word' : 'words'}
             </span>
@@ -631,21 +366,6 @@ export default function FocusPage() {
               <span className={styles.focusLabel}>{focusLabel}</span>
               <span className={styles.focusIcon}>{focusIcon}</span>
             </button>
-            {isLoggedIn && projectId && (
-              <ShareButton
-                projectId={projectId}
-                projectTitle={projectTitle}
-                getPages={getPages}
-                published={publishState.published}
-                shortId={publishState.shortId}
-                slug={publishState.slug}
-                authorName={publishState.authorName}
-                publishedTabs={publishState.publishedTabs}
-                onPublishChange={handlePublishChange}
-                isOpen={shareOpen}
-                onOpenChange={setShareOpen}
-              />
-            )}
             {/* Shortcuts reference — desktop only */}
             <div className={styles.shortcutsWrap} ref={shortcutsRef}>
               <button
@@ -716,22 +436,6 @@ export default function FocusPage() {
                     {focusIcon}
                     {focusLabel}
                   </button>
-                  {isLoggedIn && projectId && (
-                    <button
-                      className={styles.actionsMenuItem}
-                      onClick={() => {
-                        setShareOpen(true);
-                        setActionsOpen(false);
-                      }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M4 12V14H12V12" />
-                        <path d="M8 10V2" />
-                        <path d="M5 5L8 2L11 5" />
-                      </svg>
-                      Share post
-                    </button>
-                  )}
                   <button
                     className={styles.actionsMenuItem}
                     onClick={handleCopyPost}
@@ -745,10 +449,14 @@ export default function FocusPage() {
                 </div>
               )}
             </div>
-            <UserMenu
-              onDropdownOpen={() => setDropdownOpen(true)}
-              onDropdownClose={() => setDropdownOpen(false)}
-            />
+            {/* Settings gear */}
+            <button
+              className={styles.shortcutsBtn}
+              onClick={() => setSettingsPanelOpen((v) => !v)}
+              title="Settings"
+            >
+              {gearIcon}
+            </button>
             {/* Inline toggle — inside the bar */}
             <button
               className={styles.toggleInline}
@@ -763,54 +471,13 @@ export default function FocusPage() {
 
       {/* Scroll area — only this region scrolls */}
       <div className={styles.scrollArea}>
-        {/* Editable project title */}
+        {/* Static title */}
         <div className={styles.pageTitle}>
-          {isLoggedIn && projectId && editingTitle ? (
-            <input
-              className={styles.pageTitleInput}
-              value={titleEditValue}
-              onChange={(e) => setTitleEditValue(e.target.value)}
-              onKeyDown={handleTitleKeyDown}
-              onBlur={handleTitleBlur}
-              autoFocus
-            />
-          ) : isLoggedIn && projectId ? (
-            <button className={styles.pageTitleText} onClick={startEditingTitle}>
-              {projectTitle || 'Untitled'}
-            </button>
-          ) : (
-            <span className={styles.pageTitleText}>{projectTitle || 'Untitled'}</span>
-          )}
+          <span className={styles.pageTitleText}>Hermes</span>
         </div>
         {/* Page tabs — scroll with content */}
         <div className={styles.tabsArea}>
           <PageTabs activeTab={activeTab} onTabChange={handleTabChange} pages={pages} />
-        </div>
-        {/* Optional subtitle */}
-        <div className={styles.subtitle}>
-          {isLoggedIn && projectId && editingSubtitle ? (
-            <input
-              className={styles.subtitleInput}
-              value={subtitleEditValue}
-              onChange={(e) => setSubtitleEditValue(e.target.value)}
-              onKeyDown={handleSubtitleKeyDown}
-              onBlur={handleSubtitleBlur}
-              placeholder="Add a subtitle..."
-              autoFocus
-            />
-          ) : projectSubtitle ? (
-            isLoggedIn && projectId ? (
-              <button className={styles.subtitleText} onClick={startEditingSubtitle}>
-                {projectSubtitle}
-              </button>
-            ) : (
-              <span className={styles.subtitleText}>{projectSubtitle}</span>
-            )
-          ) : isLoggedIn && projectId ? (
-            <button className={styles.subtitleAdd} onClick={startEditingSubtitle}>
-              Add subtitle...
-            </button>
-          ) : null}
         </div>
         <div className={styles.content}>
           <div className={styles.editorWrap}>
@@ -831,19 +498,20 @@ export default function FocusPage() {
       {/* Link tooltip */}
       <LinkTooltip tooltip={linkTooltip} isMac={isMac} />
 
+      {/* Settings panel */}
+      <SettingsPanel
+        isOpen={settingsPanelOpen}
+        onClose={() => setSettingsPanelOpen(false)}
+      />
+
       {/* Floating chat window */}
       <Sentry.ErrorBoundary fallback={<div style={{ position: 'fixed', bottom: 24, left: 24, color: 'var(--text-muted)', fontSize: 13 }}>Chat unavailable</div>}>
         <FocusChatWindow
-          projectId={projectId}
           getPages={getPages}
           activeTab={activeTab}
           onHighlights={handleHighlights}
-          session={session}
-          isOffline={isOffline}
         />
       </Sentry.ErrorBoundary>
-
-      <SignupToast wordCount={wordCount} isLoggedIn={isLoggedIn} />
     </div>
   );
 }

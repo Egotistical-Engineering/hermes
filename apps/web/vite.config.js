@@ -27,16 +27,13 @@ export default defineConfig(async () => {
       rollupOptions: {
         // Tauri plugins are only available inside the native shell — exclude from web build
         external: [
-          '@tauri-apps/plugin-deep-link',
           '@tauri-apps/plugin-shell',
           '@tauri-apps/plugin-store',
-          '@hermes/offline',
         ],
         output: {
           manualChunks: {
-            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-react': ['react', 'react-dom'],
             'vendor-sentry': ['@sentry/react'],
-            'vendor-supabase': ['@supabase/supabase-js'],
             'vendor-tiptap': ['@tiptap/react', '@tiptap/starter-kit', '@tiptap/extension-placeholder', '@tiptap/markdown'],
             'vendor-markdown': ['react-markdown', 'remark-gfm'],
           },

@@ -1,13 +1,13 @@
 # Hermes
 
-An AI-guided writing tool that structures your thinking without doing the writing for you. Built on the Dignified Technology design philosophy. React 19, Supabase, Express 5, Anthropic Claude.
+A local-first AI writing tool that structures your thinking without doing the writing for you. BYOK (bring your own key) — users provide their own Anthropic or OpenAI API keys. React 19, Express 5, Tauri 2.
 
 ## Open Source — Security Rules
 
 This is an **open-source repository**. Every file, commit, and PR is publicly visible. Follow these rules strictly:
 
 - **Never commit secrets**: No API keys, tokens, passwords, DSNs, or credentials in code or config files. All secrets go in `.env` files (which are `.gitignore`d).
-- **Never hardcode URLs with credentials**: No Supabase service keys, Sentry DSNs, or third-party tokens inline.
+- **Never hardcode URLs with credentials**: No Sentry DSNs or third-party tokens inline.
 - **Audit before committing**: Before staging files, verify no `.env`, credentials, or private keys are included. If in doubt, ask.
 - **Plans and PR descriptions**: Do not include real API keys, passwords, or internal URLs. Use placeholders like `YOUR_API_KEY` or `<redacted>`.
 - **Review diffs carefully**: Check `git diff` output for accidental secret leaks before every commit.
@@ -22,208 +22,159 @@ npm run dev
 # Or separately:
 npm run web:dev      # Frontend only
 npm run server:dev   # Backend only
+
+# Native desktop app (Tauri)
+npm run native:dev           # Full rebuild (sidecar + Tauri)
+npm run native:dev:fast      # Skip sidecar rebuild
+npm run native:dev:debugtools  # With DevTools enabled
+npm run native:build         # Production build (.app + .dmg)
 ```
 
 ## Architecture
 
-**Frontend**: React 19 + Vite 7 + react-router-dom + CSS Modules
-**Backend**: Express 5 + Anthropic Claude (`/server/src/`)
-**Database**: Supabase (PostgreSQL + Auth)
+**Frontend**: React 19 + Vite 7 + CSS Modules (no router — single page)
+**Backend**: Express 5 + Anthropic SDK + OpenAI SDK (`/server/src/`)
+**Native**: Tauri 2 (desktop + mobile) with sidecar server binary
+**No database** — all state is local (localStorage / Tauri Store)
 
 ### Provider hierarchy
 
 ```
-Sentry.ErrorBoundary → BrowserRouter → AuthProvider → App
+Sentry.ErrorBoundary → App → FocusPage
 ```
 
-### Route structure
-
-```
-/                       → RedirectToLatestProject (redirects to /projects/:id)
-/projects/:projectId    → FocusPage (auth required)
-/login                  → LoginPage (standalone login form)
-/signup                 → SignupPage (standalone signup form)
-/forgot-password        → Redirect to / (forgot password lives in UserMenu dropdown)
-/reset-password         → ResetPasswordPage
-/auth/confirm           → AuthConfirmPage
-*                       → NotFound (404)
-```
+No auth, no routing. The app is a single FocusPage.
 
 ## Project Structure
 
 ```
 apps/web/src/
-  pages/
-    FocusPage/              # Main writing workspace (AI assistant + editor)
+  App.jsx                     # Renders FocusPage + Toaster
+  main.jsx                    # Sentry init, StrictMode, ErrorBoundary
+  index.css                   # Global theme tokens (CSS custom properties)
+  lib/
+    settingsStorage.js        # Settings persistence (Tauri Store or localStorage)
+    platform.js               # Platform detection (IS_TAURI, IS_MOBILE, IS_DESKTOP, IS_WEB)
+    mobileKeyboard.js         # Mobile keyboard helpers for Tauri
   components/
-    MarkdownText/           # Markdown rendering component
-  contexts/
-    AuthContext.jsx          # Auth state management
-  hooks/                    # useAuth + data fetching hooks
-  styles/                   # Shared CSS primitives (form, dropdown)
+    MarkdownText/             # Markdown rendering component
+  pages/
+    FocusPage/                # Main writing workspace
+      FocusPage.jsx           # TipTap editor + tabs + settings bar
+      FocusChatWindow.jsx     # AI assistant chat with model selector
+      SettingsPanel.jsx       # API key entry (Anthropic + OpenAI)
+      PageTabs.jsx            # 5-tab switcher (Coral, Amber, Sage, Sky, Lavender)
+      HighlightPopover.jsx    # Accept/dismiss inline highlights
+      LinkTooltip.jsx         # Inline link tooltip
+      SourcesPill.jsx         # Source citations display
+      useFocusMode.js         # Focus mode state
+      useHighlights.js        # Highlight management
+      useInlineLink.js        # Link handling
+  styles/                     # Shared CSS primitives (form, dropdown)
+
+apps/native/src-tauri/
+  src/lib.rs                  # Tauri setup: sidecar spawn, devtools toggle, cleanup
+  tauri.conf.json             # App config, CSP, sidecar declaration
+  binaries/                   # Built sidecar binary (hermes-server-{target})
 
 packages/
-  api/src/writing.ts        # TypeScript interfaces + client API functions
-  domain/                   # Shared pure domain utils (relativeTime)
+  api/src/
+    index.ts                  # Exports types + welcome seed content
+    writing.ts                # TypeScript interfaces (WritingProject, Highlight, etc.)
+    welcome-seed.ts           # Welcome content for new users
 
 server/src/
-  index.ts                  # Express entry (port 3001)
-  routes/assistant.ts       # Assistant chat endpoint (SSE streaming with highlights)
-  lib/                      # supabase.ts, logger.ts (pino)
-  middleware/auth.ts        # JWT verification
+  index.ts                    # Express entry (port 3003, host 127.0.0.1)
+  env.ts                      # Dotenv loader
+  routes/assistant.ts         # POST /api/assistant/chat (SSE streaming)
+  lib/logger.ts               # Pino logger
+  types/express.d.ts          # TypeScript augmentation
+
+scripts/
+  build-sidecar.mjs           # Bundles server → standalone binary via esbuild + pkg
 ```
 
-## API endpoints
+## API Endpoint
 
-**Implemented** (`server/src/routes/assistant.ts`):
+Single endpoint — `POST /api/assistant/chat` (`server/src/routes/assistant.ts`)
 
-- `POST /api/assistant/chat` — contextual assistant chat with inline highlights (SSE)
+**Accepts** (JSON body):
+- `message` — user's message text
+- `pages` — record of page contents (keyed by tab name)
+- `activeTab` — current editor tab
+- `provider` — `"anthropic"` or `"openai"`
+- `model` — model ID (e.g. `claude-sonnet-4-6`, `gpt-4o`)
+- `apiKey` — user's API key for the selected provider
+- `conversationHistory` — last 30 messages
 
-**Auth** (`server/src/routes/auth.ts`):
+**Returns** SSE stream with events: `text`, `highlight`, `source`, `tool_status`, `done`, `error`
 
-- `POST /api/auth/validate-invite` — check if invite code is valid (no usage increment)
-- `POST /api/auth/signup` — create user with invite code (email/password, auto-confirmed); stamps `trial_expires_at` if trial code
-- `POST /api/auth/use-invite` — consume invite code use (for Google OAuth flow); returns `trialDays`
-- `POST /api/auth/activate-trial` — activate trial for current user (Google OAuth flow, auth required, idempotent)
+**Tools available to the AI**: `add_highlight` (inline text annotations), `cite_source` (source references)
 
-**Billing** (`server/src/routes/stripe.ts` + `server/src/routes/usage.ts`):
+The server is **stateless** — no database, no auth, no session management. API keys are passed per-request from the client.
 
-- `POST /api/stripe/webhook` — Stripe webhook handler (signature-verified, idempotent)
-- `POST /api/stripe/portal` — create Stripe Customer Portal session (auth required)
-- `GET /api/usage/current` — current user's message usage and plan info (auth required)
+## Settings & API Keys (BYOK)
 
-### Database tables
+Users bring their own API keys. Settings are stored locally:
 
-All tables linked by `project_id`, owner-scoped via RLS:
+- **Web**: `localStorage` under key `hermes-settings`
+- **Native (Tauri)**: `tauri-plugin-store` for persistent secure storage, with localStorage fallback
 
-- `projects` — `id`, `user_id`, `title`, `status`, `content`, `highlights` (JSONB), timestamps
-- `assistant_conversations` — `project_id` (unique), `messages` (JSONB), timestamps
-- `user_profiles` — `id` (PK → auth.users), `plan`, `stripe_customer_id`, `stripe_subscription_id`, `subscription_status`, `billing_cycle_anchor`, `cancel_at_period_end`, `current_period_end`, `trial_expires_at`, timestamps
-- `message_usage` — `id`, `user_id`, `project_id`, `created_at` (tracks per-message usage for limits)
-- `processed_stripe_events` — `event_id` (PK), `event_type`, `processed_at` (webhook idempotency)
-
-## Staging Environment
-
-### Deployed staging
-
-- **Frontend**: `https://staging.dearhermes.com` (Vercel, aliased via CI on every PR)
-- **Backend**: Railway `staging` environment (deploys from PR via CI)
-- **Supabase**: Separate `hermes-staging` project (us-east-1)
-
-### How staging deploys work
-
-1. Open a PR against `main` → CI runs 5 checks in parallel
-2. All checks pass → `deploy-staging` job deploys frontend to Vercel (aliased to `staging.dearhermes.com`) AND server to Railway staging via `railway deployment up`
-3. Test on `staging.dearhermes.com` → merge PR → production auto-deploys from `main`
-
-### Running locally against staging
-
-```bash
-# Frontend (port 5176, staging Supabase)
-npm run web:dev:staging
-
-# Backend (port 3003, staging Supabase) — separate terminal
-npm run server:dev:staging
+Settings object shape:
+```json
+{
+  "anthropicApiKey": "sk-ant-...",
+  "openaiApiKey": "sk-...",
+  "model": "claude-sonnet-4-6"
+}
 ```
+
+The `settingsStorage.js` module provides async `loadSettings()` and `saveSettings()` that abstract the Tauri Store / localStorage difference.
+
+### Model selection
+
+The model selector lives in `FocusChatWindow.jsx` (bottom of chat input area). Available models:
+- **Anthropic**: Sonnet 4.6, Haiku 4.5, Opus 4.6
+- **OpenAI**: GPT-4o, GPT-4o Mini
+
+Provider is derived from the model — `claude-*` models use the Anthropic key, others use OpenAI. The correct API key is automatically selected per-request.
+
+## Native App (Tauri)
 
 ### How it works
 
-- **Server**: `DOTENV_CONFIG_PATH=server/.env.staging` tells `dotenv/config` to load staging credentials instead of `server/.env`. Zero source code changes.
-- **Frontend**: `vite --mode staging` loads `apps/web/.env.staging` automatically (native Vite behavior).
+1. Tauri launches and spawns the `hermes-server` sidecar binary
+2. The sidecar is a standalone Node 20 executable (built with esbuild + pkg)
+3. The sidecar listens on `127.0.0.1:3003`
+4. The WebView loads the frontend, which makes requests to the sidecar
+5. On app close, the sidecar process is killed
 
-### Key differences from production
+### CORS
 
-- Frontend and backend MUST target the same Supabase project (auth tokens are project-scoped)
-- Vercel Deployment Protection is disabled for Preview (staging is publicly accessible)
+The server allows these origins:
+- `http://localhost:5176` (web dev)
+- `tauri://localhost` (Tauri WebView)
+- `https://tauri.localhost`
+- Any `localhost` / `127.0.0.1` origin
 
-## Supabase
+### CSP
 
-### Environment mapping
+Configured in `tauri.conf.json`. `connect-src` must include `http://127.0.0.1:3003`, `http://localhost:3003`, `ipc://localhost`, and the AI provider APIs.
 
-| Environment | Supabase Project | Project ID |
-|---|---|---|
-| Local dev (`npm run dev`) | hermes-staging | `jrqajnmudggfyghmyrun` |
-| Staging (`npm run dev:staging`) | hermes-staging | `jrqajnmudggfyghmyrun` |
-| Vercel preview / `staging.dearhermes.com` | hermes-staging | `jrqajnmudggfyghmyrun` |
-| Vercel production / `dearhermes.com` | hermes (production) | `oddczcritnsiahruqqaw` |
+### DevTools
 
-Production credentials are **never** stored in local env files. They are only set in Vercel and Railway dashboards.
+DevTools are behind a Cargo feature flag (`debug-tools`). Use `npm run native:dev:debugtools` to enable. The SettingsPanel has a "Toggle DevTools" button in Tauri builds.
 
-- **Region**: us-east-1
-- **Tables**: `projects`, `assistant_conversations`, `user_profiles`, `message_usage`, `processed_stripe_events`, `invite_codes`, `user_mcp_servers`
-- **Migrations**: `supabase/migrations/` (00001 initial, 00002 pages, 00003 publishing, 00004 invite codes, 00005 published pages + subtitle, 00006 subscriptions, 00007 user MCP servers, 00008 security hardening, 00009 audit remediation, 00010 trial codes)
-- **RLS**: Owner-scoped — authenticated users can only read/write their own data. Published projects are publicly readable via RLS, but client queries must always filter by `user_id` to avoid leaking published projects into other users' project lists.
+### Sidecar build
 
-### Data conventions
-
-- Database uses `snake_case` columns
-- Hooks transform to `camelCase` before passing to components
-- API layer accepts `camelCase`, converts back to `snake_case` for writes
-
-## Auth
-
-Email/password via Supabase Auth, gated behind invite codes. `AuthContext` provides `session`, `signIn`, `signOut`. Writing pages are wrapped in `RequireAuth`.
-
-### Invite code signup flow
-
-Signup requires a valid invite code. The flow:
-
-1. User enters invite code → validated via `POST /api/auth/validate-invite`
-2. User fills email/password → account created via `POST /api/auth/signup` (auto-confirmed)
-3. Google OAuth: invite code consumed via `POST /api/auth/use-invite` before redirect
-
-Users created with invite codes are auto-confirmed (no email verification needed). The `invite_codes` table has no RLS policies — only the server (service key) accesses it.
-
-### Trial invite codes
-
-Some invite codes grant a time-limited trial (e.g. 30 days, 100 messages/month). Trial codes have a non-null `trial_days` column in `invite_codes`. The system uses `use_invite_code_v2()` which returns `-1` (invalid), `0` (standard code), or `N > 0` (trial days).
-
-**How it works:**
-- On signup, if `trialDays > 0`, the server stamps `trial_expires_at` on `user_profiles`
-- The usage gate checks: Pro → Trial (active `trial_expires_at`) → Free, in that order
-- Trial users get `TRIAL_MONTHLY_LIMIT` (100/month). Expired trials fall through to Free (10/day)
-- No cron job — expiry is checked lazily on every request
-- Limits are defined in `server/src/lib/limits.ts`
-
-**Google OAuth path:** The frontend stores `trialDays` in `sessionStorage` after consuming the invite code, then `AuthContext` calls `POST /api/auth/activate-trial` after the OAuth redirect completes (idempotent).
-
-**Trial codes are NOT seeded in migrations** — this is an open-source repo. Insert them manually via the Supabase SQL editor:
-```sql
-INSERT INTO public.invite_codes (code, max_uses, trial_days)
-  VALUES ('your-code', 50, 30);
-```
-
-**Edge cases:**
-- Pro subscription takes priority over active trial (`isPro` checked first)
-- Expired trial = Free tier. `trial_expires_at` stays as audit trail
-- `activate-trial` is idempotent — skips if `trial_expires_at` already set
-- Trial users do NOT get MCP access (`hasMcpAccess = isPro || isAdmin`)
-
-### Server env vars
-
-```
-ANTHROPIC_API_KEY=...
-SUPABASE_URL=...
-SUPABASE_SERVICE_KEY=...
-SUPABASE_ANON_KEY=...
-STRIPE_SECRET_KEY=...         # Stripe secret key for billing
-STRIPE_WEBHOOK_SECRET=...     # Stripe webhook signing secret
-SENTRY_DSN=...                # Error tracking (optional)
-LOG_LEVEL=info                # debug, info, warn, error
-```
+`scripts/build-sidecar.mjs`:
+1. Bundles `server/src/index.ts` → single CJS file with esbuild
+2. Compiles to standalone binary with `@yao-pkg/pkg` (Node 20)
+3. Names as `hermes-server-{target-triple}` and places in `apps/native/src-tauri/binaries/`
 
 ## Styling
 
 CSS Modules for component styles. Global theme tokens via CSS custom properties in `apps/web/src/index.css`. No CSS framework, no Tailwind.
-
-### Shared style primitives
-
-Two shared CSS files in `apps/web/src/styles/` provide reusable base styles via CSS Modules `composes`:
-
-- **`form.module.css`** — `.form`, `.label`, `.input`, `.textarea`, `.actions`, `.cancelBtn`, `.submitBtn`
-- **`dropdown.module.css`** — `.menu`, `.item`, `.itemDanger`
-
-When adding new forms or dropdown menus, always `composes` from these primitives and only add component-specific overrides locally.
 
 ### Key tokens
 
@@ -236,15 +187,35 @@ When adding new forms or dropdown menus, always `composes` from these primitives
 --content-padding
 ```
 
+### Shared style primitives
+
+Two shared CSS files in `apps/web/src/styles/`:
+
+- **`form.module.css`** — `.form`, `.label`, `.input`, `.textarea`, `.actions`, `.cancelBtn`, `.submitBtn`
+- **`dropdown.module.css`** — `.menu`, `.item`, `.itemDanger`
+
+## Server Env Vars
+
+```
+HOST=127.0.0.1               # Bind address (default: 127.0.0.1)
+PORT=3003                     # Port (default: 3003)
+FRONTEND_URL=...              # Allowed CORS origin (default: http://localhost:5176)
+SENTRY_DSN=...                # Error tracking (optional)
+LOG_LEVEL=info                # debug, info, warn, error
+NODE_ENV=development          # development or production
+```
+
+No API keys in server env — they come from the client per-request.
+
 ## DevOps
 
 ### CI
 
-GitHub Actions workflow (`.github/workflows/ci.yml`) runs 5 parallel jobs on push/PR to main: **typecheck**, **build**, **test**, **server-deploy-check**, **lint**. On PRs, a 6th job **deploy-staging** runs after all checks pass — it deploys frontend to Vercel (aliased to `staging.dearhermes.com`) and server to Railway staging via `railway deployment up`. Uses `.node-version` for consistent Node version.
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs parallel jobs on push/PR to main: **typecheck**, **build**, **test**, **server-deploy-check**, **lint**. Uses `.node-version` for consistent Node version.
 
 ### Error tracking (Sentry)
 
-- **Frontend**: `@sentry/react` initialized in `main.jsx`. `Sentry.ErrorBoundary` wraps the entire app. Session replay enabled on errors only with `maskAllText: true`.
+- **Frontend**: `@sentry/react` initialized in `main.jsx`. `Sentry.ErrorBoundary` wraps the entire app.
 - **Server**: `@sentry/node` initialized in `index.ts`. Only enabled in production.
 - **DSN**: Set via `VITE_SENTRY_DSN` (frontend) and `SENTRY_DSN` (server) env vars.
 
@@ -253,17 +224,6 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs 5 parallel jobs on pus
 `npm run lint` runs ESLint across the entire monorepo. Config in `eslint.config.js`:
 - Frontend (`apps/web/**`): JS/JSX with React hooks + refresh rules
 - Server (`server/src/**`): TypeScript with `typescript-eslint`
-
-### Deploy sequence for database migrations
-
-When a PR includes a Supabase migration, follow this order strictly:
-
-1. **Run migration on staging** (`jrqajnmudggfyghmyrun`) first
-2. **Test on staging** — verify the feature works end-to-end
-3. **Run migration on production** (`oddczcritnsiahruqqaw`) only after staging is verified
-4. **Merge the PR** only after production has the schema change applied
-
-Never merge a PR with a migration before the migration has been applied to production. Code that references new columns/tables will break if deployed before the schema exists.
 
 ## Common Tasks
 
@@ -279,22 +239,16 @@ Always run after CSS changes to catch broken imports or syntax.
 
 Create `apps/web/src/components/Name/Name.jsx` and `Name.module.css`. Import CSS module as `styles`. Follow existing patterns.
 
-### Adding a Supabase table
-
-Add a new migration file in `supabase/migrations/`. Include RLS policies: authenticated read/write scoped to owner.
-
-### Adding a new route
-
-Add the route to `apps/web/src/App.jsx`. Wrap in `RequireAuth` if auth is required.
-
 ## Gotchas
 
 - Dev server is port **5176** (not 5173)
-- Local dev and staging both use **hermes-staging** Supabase — not production
-- Invite-code signups are **auto-confirmed** via `admin.createUser()` — no email verification needed
-- **Client-side Supabase queries on `projects` must always filter by `user_id`** — the "Anyone can read published projects" RLS policy will leak other users' published projects into query results if you don't
-- Toast notifications use theme tokens for consistent appearance
-- Test dev credentials (email/password) are in `server/.env`
+- Backend binds to **127.0.0.1:3003** by default
+- Native app uses `tauri://localhost` origin — server CORS must allow it
+- Tauri DevTools require the `debug-tools` Cargo feature flag
+- The sidecar binary must be rebuilt when server code changes (`npm run build:sidecar`)
+- `pkg` warnings during sidecar build ("Cannot resolve 'mod'", "Malformed requirement") are harmless
+- Bundle identifier `com.dearhermes.app` ends with `.app` — macOS warns about this (cosmetic, not blocking)
+- Settings storage is async (Tauri Store) — use `await loadSettings()` / `await saveSettings()`
 
 ## README Maintenance
 

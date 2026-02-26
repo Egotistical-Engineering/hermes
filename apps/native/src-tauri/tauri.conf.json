@@ -7,7 +7,7 @@
     "beforeDevCommand": "npm run dev -w @hermes/web",
     "beforeBuildCommand": "npm run build -w @hermes/web",
     "devUrl": "http://localhost:5176",
-    "frontendDist": "../../apps/web/dist"
+    "frontendDist": "../../../apps/web/dist"
   },
   "app": {
     "windows": [
@@ -22,12 +22,15 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://*.sentry.io https://*.posthog.com http://localhost:3003; img-src 'self' data: https:; font-src 'self' data:"
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc://localhost https://api.anthropic.com https://api.openai.com https://*.sentry.io http://127.0.0.1:3003 http://localhost:3003; img-src 'self' data: https:; font-src 'self' data:"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "externalBin": [
+      "binaries/hermes-server"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -48,12 +51,6 @@
     }
   },
   "plugins": {
-    "deep-link": {
-      "desktop": {
-        "schemes": ["hermes"]
-      },
-      "mobile": []
-    },
     "shell": {
       "open": true
     }

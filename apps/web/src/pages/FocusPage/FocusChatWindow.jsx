@@ -1,12 +1,37 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import posthog from 'posthog-js';
-import { fetchAssistantConversation, startAssistantStream } from '@hermes/api';
-import useUsage from '../../hooks/useUsage';
 import SourcesPill from './SourcesPill';
 import styles from './FocusChatWindow.module.css';
+import { loadSettings, saveSettings } from '../../lib/settingsStorage';
 
 const MarkdownText = lazy(() => import('../../components/MarkdownText/MarkdownText'));
+
+const CHAT_STORAGE_KEY = 'hermes-chat-messages';
+const DEFAULT_MODEL = 'claude-sonnet-4-6';
+
+const MODELS = [
+  { provider: 'anthropic', value: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
+  { provider: 'anthropic', value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
+  { provider: 'anthropic', value: 'claude-opus-4-6', label: 'Opus 4.6' },
+  { provider: 'openai', value: 'gpt-4o', label: 'GPT-4o' },
+  { provider: 'openai', value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+];
+
+const PROVIDERS = ['anthropic', 'openai'];
+
+function getProviderForModel(modelValue) {
+  const entry = MODELS.find((m) => m.value === modelValue);
+  return entry?.provider || 'anthropic';
+}
+
+function normalizeModel(modelValue) {
+  if (MODELS.some((m) => m.value === modelValue)) return modelValue;
+  return DEFAULT_MODEL;
+}
+
+function getApiKeyForProvider(settings, provider) {
+  if (provider === 'openai') return settings.openaiApiKey || '';
+  return settings.anthropicApiKey || '';
+}
 
 /**
  * Reads a structured SSE stream (event: text | highlight | done | error).
@@ -53,48 +78,138 @@ async function readAssistantStream(response, { onText, onHighlight, onSource, on
   }
 }
 
-export default function FocusChatWindow({ projectId, getPages, activeTab, onHighlights, session, isOffline }) {
+function ModelSelector({ selectedModel, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  const currentModel = MODELS.find((m) => m.value === selectedModel) || MODELS[0];
+
+  useEffect(() => {
+    if (!open) return;
+    function handleMouseDown(e) {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false);
+      }
+    }
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className={styles.modelSelector} ref={ref}>
+      <button
+        className={styles.modelBtn}
+        onClick={() => setOpen((v) => !v)}
+        type="button"
+      >
+        {currentModel.label}
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <path d="M2.5 4L5 6.5L7.5 4" />
+        </svg>
+      </button>
+      {open && (
+        <div className={styles.modelDropdown}>
+          {PROVIDERS.map((provider) => (
+            <div key={provider}>
+              <div className={styles.modelGroupLabel}>
+                {provider === 'anthropic' ? 'Anthropic' : 'OpenAI'}
+              </div>
+              {MODELS.filter((m) => m.provider === provider).map((m) => (
+                <button
+                  key={m.value}
+                  className={`${styles.modelOption} ${m.value === selectedModel ? styles.modelOptionSelected : ''}`}
+                  onClick={() => {
+                    onSelect(m.value);
+                    setOpen(false);
+                  }}
+                  type="button"
+                >
+                  <span>{m.label}</span>
+                  {m.value === selectedModel && (
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M2.5 6L5 8.5L9.5 3.5" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function FocusChatWindow({ getPages, activeTab, onHighlights }) {
   const [expanded, setExpanded] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [toolStatus, setToolStatus] = useState(null);
-  const [loaded, setLoaded] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const abortRef = useRef(null);
-  const { usage, refresh: refreshUsage } = useUsage(session);
 
-  // Load conversation history on mount / project change
   useEffect(() => {
-    // Abort any in-flight stream from the previous project
-    abortRef.current?.abort();
-    abortRef.current = null;
-
-    if (!session || !projectId) {
-      setMessages([]);
-      setLoaded(true);
-      return;
-    }
-
     let cancelled = false;
-    setLoaded(false);
 
-    fetchAssistantConversation(projectId)
-      .then((msgs) => {
-        if (cancelled) return;
-        setMessages(msgs);
-        setLoaded(true);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setMessages([]);
-          setLoaded(true);
-        }
-      });
+    (async () => {
+      const settings = await loadSettings();
+      const nextModel = normalizeModel(settings.model);
+      if (!cancelled) {
+        setSelectedModel(nextModel);
+      }
+      if (settings.model !== nextModel) {
+        settings.model = nextModel;
+        await saveSettings(settings);
+      }
+    })();
 
-    return () => { cancelled = true; };
-  }, [projectId, session]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Persist model selection
+  const handleModelSelect = useCallback((modelValue) => {
+    setSelectedModel(modelValue);
+    void (async () => {
+      const settings = await loadSettings();
+      settings.model = modelValue;
+      await saveSettings(settings);
+    })();
+  }, []);
+
+  // Load conversation from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(CHAT_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) setMessages(parsed);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Save conversation to localStorage when messages change
+  useEffect(() => {
+    if (messages.length === 0) return;
+    try {
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
+    } catch {
+      // localStorage full
+    }
+  }, [messages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -102,22 +217,30 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || streaming || !session || !projectId) return;
+    if (!text || streaming) return;
 
-    const accessToken = session.access_token;
+    const settings = await loadSettings();
+    const model = normalizeModel(selectedModel);
+    const provider = getProviderForModel(model);
+    const apiKey = getApiKeyForProvider(settings, provider);
+
+    if (!apiKey) {
+      const providerName = provider === 'anthropic' ? 'Anthropic' : 'OpenAI';
+      setMessages((prev) => [
+        ...prev,
+        { role: 'user', content: text, timestamp: new Date().toISOString() },
+        { role: 'assistant', content: `Please add your ${providerName} API key in Settings (gear icon) before sending messages.`, timestamp: new Date().toISOString() },
+      ]);
+      setInput('');
+      return;
+    }
+
     setInput('');
     setStreaming(true);
 
-    // Optimistic user message
     const userMsg = { role: 'user', content: text, timestamp: new Date().toISOString() };
     setMessages((prev) => [...prev, userMsg]);
 
-    posthog.capture('chat_message_sent', {
-      message_length: text.length,
-      conversation_length: messages.length,
-    });
-
-    // Start streaming placeholder for assistant
     const assistantMsg = { role: 'assistant', content: '', timestamp: new Date().toISOString() };
     setMessages((prev) => [...prev, assistantMsg]);
 
@@ -126,7 +249,37 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
       const controller = new AbortController();
       abortRef.current = controller;
 
-      const response = await startAssistantStream(projectId, text, getPages() || {}, activeTab || 'coral', accessToken, controller.signal);
+      // Build conversation history for the backend (last 30 messages)
+      const allMsgs = [...messages, userMsg];
+      const conversationHistory = allMsgs.slice(-30).map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      const response = await fetch('http://127.0.0.1:3003/api/assistant/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          pages: getPages() || {},
+          activeTab: activeTab || 'coral',
+          provider,
+          model,
+          apiKey,
+          conversationHistory,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const err = new Error('Failed to stream assistant response');
+        err.status = response.status;
+        try {
+          const body = await response.json();
+          err.serverMessage = body.error || body.message;
+        } catch { /* */ }
+        throw err;
+      }
 
       const collectedHighlights = [];
       const collectedSources = [];
@@ -179,7 +332,6 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
           if (collectedHighlights.length > 0) {
             onHighlights?.(collectedHighlights);
           }
-          // Attach sources to the assistant message
           if (collectedSources.length > 0) {
             setMessages((prev) => {
               const updated = [...prev];
@@ -191,7 +343,6 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
             });
           }
           setToolStatus(null);
-          refreshUsage(true);
         },
         onError() {
           if (rafId !== null) cancelAnimationFrame(rafId);
@@ -200,44 +351,22 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
         },
       });
     } catch (err) {
-      // Ignore abort errors (user navigated away or sent another message)
       if (err?.name === 'AbortError') return;
 
-      if (err?.status === 429) {
-        // Rate limited — show inline upgrade message
-        const limitMsg = err.plan === 'pro'
-          ? `You've reached your monthly limit of ${err.limit} messages. Your limit resets soon — thank you for supporting Hermes.`
-          : err.isTrial
-            ? `You've used all ${err.limit} trial messages for this month.\n\nBecome a Patron ($15/mo) to get 300 messages per month. [Learn more](/upgrade)`
-            : `You've reached your daily limit of ${err.limit} messages.\n\nBecome a Patron ($15/mo) to get 300 messages per month and support Hermes development. [Learn more](/upgrade)`;
-
-        setMessages((prev) => {
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last.role === 'assistant' && !last.content) {
-            updated[updated.length - 1] = {
-              ...last,
-              content: limitMsg,
-            };
-          }
-          return updated;
-        });
-        refreshUsage(true);
-      } else {
-        // Remove the empty assistant message on error
-        setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last.role === 'assistant' && !last.content) {
-            return prev.slice(0, -1);
-          }
-          return prev;
-        });
-      }
+      const errorMsg = err?.serverMessage || 'Something went wrong. Check your API key and try again.';
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last.role === 'assistant' && !last.content) {
+          updated[updated.length - 1] = { ...last, content: errorMsg };
+        }
+        return updated;
+      });
     } finally {
       setStreaming(false);
       setToolStatus(null);
     }
-  }, [input, streaming, session, projectId, getPages, activeTab, onHighlights, refreshUsage]);
+  }, [input, streaming, messages, getPages, activeTab, onHighlights, selectedModel]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -246,20 +375,23 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
     }
   };
 
-  // Focus the chat input and optionally pre-fill with context (for "Reply" from highlight popover)
   const focusInput = useCallback((prefill) => {
     setExpanded(true);
     if (prefill) setInput(prefill);
     setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
 
-  // Expose focusInput via a ref-like pattern
   useEffect(() => {
     if (typeof window !== 'undefined') {
       window.__hermesChatFocus = focusInput;
     }
     return () => { window.__hermesChatFocus = undefined; };
   }, [focusInput]);
+
+  const handleClearChat = useCallback(() => {
+    setMessages([]);
+    try { localStorage.removeItem(CHAT_STORAGE_KEY); } catch { /* */ }
+  }, []);
 
   const wingIcon = (size) => (
     <svg width={size} height={size} viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -281,8 +413,6 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
     );
   }
 
-  const isLoggedIn = !!session;
-
   return (
     <div className={styles.card}>
       <div className={styles.header}>
@@ -290,28 +420,30 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
           {wingIcon(16)}
           <span className={styles.headerLabel}>Hermes</span>
         </div>
-        <button
-          className={styles.minimizeBtn}
-          onClick={() => setExpanded(false)}
-          aria-label="Minimize assistant"
-        >
-          —
-        </button>
+        <div className={styles.headerRight}>
+          {messages.length > 0 && (
+            <button
+              className={styles.clearBtn}
+              onClick={handleClearChat}
+              title="Clear chat"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6.5 7v5M9.5 7v5M3.5 4l.5 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l.5-9" />
+              </svg>
+            </button>
+          )}
+          <button
+            className={styles.minimizeBtn}
+            onClick={() => setExpanded(false)}
+            aria-label="Minimize assistant"
+          >
+            —
+          </button>
+        </div>
       </div>
 
       <div className={styles.messages}>
-        {!isLoggedIn ? (
-          <div className={styles.loginPrompt}>
-            <p className={styles.loginText}>
-              <Link to="/signup" className={styles.loginLink}>Sign up</Link> to chat with Hermes.
-            </p>
-          </div>
-        ) : !loaded ? (
-          <div className={styles.loadingSkeleton}>
-            <div className={styles.skeletonLine} style={{ width: '70%' }} />
-            <div className={styles.skeletonLine} style={{ width: '50%' }} />
-          </div>
-        ) : messages.length === 0 ? (
+        {messages.length === 0 ? (
           <div className={styles.emptyState}>
             Ask me anything about your writing.
           </div>
@@ -341,30 +473,21 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
         <div ref={messagesEndRef} />
       </div>
 
-      {isLoggedIn && (
-        <div className={styles.inputArea}>
-          {isOffline && (
-            <div className={styles.usageCounter}>
-              Offline — past messages visible
-            </div>
-          )}
-          {!isOffline && usage && (
-            <div className={styles.usageCounter}>
-              {usage.remaining} messages remaining
-            </div>
-          )}
+      <div className={styles.inputArea}>
+        <div className={styles.inputRow}>
+          <ModelSelector selectedModel={selectedModel} onSelect={handleModelSelect} />
           <input
             ref={inputRef}
             className={styles.inputField}
             type="text"
-            placeholder={isOffline ? 'Offline — connect to send messages' : streaming ? 'Hermes is thinking...' : 'Type a message...'}
+            placeholder={streaming ? 'Hermes is thinking...' : 'Type a message...'}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={streaming || isOffline}
+            disabled={streaming}
           />
         </div>
-      )}
+      </div>
     </div>
   );
 }

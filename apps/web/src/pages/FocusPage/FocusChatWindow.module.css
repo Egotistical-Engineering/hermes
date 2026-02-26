@@ -57,6 +57,29 @@
   color: #1a1a1a;
 }
 
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.clearBtn {
+  background: none;
+  border: none;
+  color: #bbb;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+}
+
+.clearBtn:hover {
+  color: #666;
+}
+
 .minimizeBtn {
   background: none;
   border: none;
@@ -112,6 +135,12 @@
   flex-shrink: 0;
 }
 
+.inputRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .usageCounter {
   font-size: 11px;
   color: #999;
@@ -119,7 +148,8 @@
 }
 
 .inputField {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   background: #eae8e2;
   border: none;
   border-radius: 8px;
@@ -140,25 +170,81 @@
   cursor: not-allowed;
 }
 
-.loginPrompt {
+/* Model selector */
+
+.modelSelector {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.modelBtn {
   display: flex;
   align-items: center;
-  justify-content: center;
-  min-height: 80px;
+  gap: 4px;
+  background: none;
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--text-muted, #666);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 
-.loginText {
-  font-size: 14px;
-  color: #999;
-  margin: 0;
+.modelBtn:hover {
+  border-color: rgba(0, 0, 0, 0.25);
+  color: var(--text-primary, #1a1a1a);
 }
 
-.loginLink {
-  color: #1a1a1a;
+.modelDropdown {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  min-width: 180px;
+  background: var(--bg-elevated, #fff);
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.1));
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px 0;
+  z-index: 300;
+}
+
+.modelGroupLabel {
+  font-size: 10px;
   font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim, #999);
+  padding: 8px 12px 4px;
 }
+
+.modelOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary, #1a1a1a);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s ease;
+}
+
+.modelOption:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+}
+
+.modelOptionSelected {
+  font-weight: 500;
+}
+
+/* Loading / skeleton */
 
 .loadingText {
   font-size: 13px;
