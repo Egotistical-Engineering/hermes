@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 import { ADMIN_USER_IDS } from '../lib/config.js';
-import { FREE_DAILY_LIMIT, FREE_TIER_DAYS, PRO_MONTHLY_LIMIT, TRIAL_MONTHLY_LIMIT } from '../lib/limits.js';
+import { FREE_DAILY_LIMIT, FREE_TIER_DAYS, PRO_MONTHLY_LIMIT } from '../lib/limits.js';
 
 const router = Router();
 
@@ -38,7 +38,6 @@ router.get('/current', requireAuth, async (req: Request, res: Response) => {
     ['active', 'trialing', 'past_due'].includes(profile.subscription_status);
 
   const trialExpiresAt = profile.trial_expires_at;
-  const isActiveTrial = !isPro && trialExpiresAt != null && new Date(trialExpiresAt) > new Date();
 
   let used: number;
   let limit: number;
@@ -55,20 +54,14 @@ router.get('/current', requireAuth, async (req: Request, res: Response) => {
     resetInfo = profile.current_period_end
       ? `Resets on ${new Date(profile.current_period_end).toLocaleDateString()}`
       : 'Resets at next billing cycle';
-  } else if (isActiveTrial) {
-    const trialStart = new Date(new Date(trialExpiresAt!).getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const { data } = await supabase.rpc('count_period_messages', {
-      p_user_id: userId,
-      p_period_start: trialStart,
-    });
-    used = data ?? 0;
-    limit = TRIAL_MONTHLY_LIMIT;
-    resetInfo = `Trial expires ${new Date(trialExpiresAt!).toLocaleDateString()}`;
   } else {
-    const accountAge = Date.now() - new Date(profile.created_at).getTime();
-    const freeExpired = accountAge > FREE_TIER_DAYS * 24 * 60 * 60 * 1000;
+    // Free tier: 10 messages/day, time-limited by trial_expires_at (or created_at + FREE_TIER_DAYS fallback)
+    const expiryDate = trialExpiresAt
+      ? new Date(trialExpiresAt)
+      : new Date(new Date(profile.created_at).getTime() + FREE_TIER_DAYS * 24 * 60 * 60 * 1000);
+    const freeExpiredNow = new Date() > expiryDate;
 
-    if (freeExpired) {
+    if (freeExpiredNow) {
       used = FREE_DAILY_LIMIT;
       limit = FREE_DAILY_LIMIT;
       resetInfo = 'Free trial expired';
@@ -81,19 +74,20 @@ router.get('/current', requireAuth, async (req: Request, res: Response) => {
       used = data ?? 0;
       limit = FREE_DAILY_LIMIT;
       const freeDaysLeft = Math.max(0, Math.ceil(
-        (new Date(profile.created_at).getTime() + FREE_TIER_DAYS * 24 * 60 * 60 * 1000 - Date.now()) / (1000 * 60 * 60 * 24)
+        (expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
       ));
       resetInfo = `Resets daily · ${freeDaysLeft} day${freeDaysLeft !== 1 ? 's' : ''} left in free trial`;
     }
   }
 
   const isAdmin = ADMIN_USER_IDS.has(userId);
-  const isFree = !isPro && !isActiveTrial;
-  const accountAge = isFree ? Date.now() - new Date(profile.created_at).getTime() : 0;
-  const freeExpired = isFree && accountAge > FREE_TIER_DAYS * 24 * 60 * 60 * 1000;
-  const freeExpiresAt = isFree
-    ? new Date(new Date(profile.created_at).getTime() + FREE_TIER_DAYS * 24 * 60 * 60 * 1000).toISOString()
-    : null;
+  const expiryDate = !isPro && trialExpiresAt
+    ? new Date(trialExpiresAt)
+    : !isPro
+      ? new Date(new Date(profile.created_at).getTime() + FREE_TIER_DAYS * 24 * 60 * 60 * 1000)
+      : null;
+  const freeExpired = expiryDate ? new Date() > expiryDate : false;
+  const freeExpiresAt = expiryDate ? expiryDate.toISOString() : null;
 
   res.json({
     plan: profile.plan,
@@ -105,7 +99,7 @@ router.get('/current', requireAuth, async (req: Request, res: Response) => {
     cancelAtPeriodEnd: profile.cancel_at_period_end,
     currentPeriodEnd: profile.current_period_end,
     hasMcpAccess: isPro || isAdmin,
-    isTrial: isActiveTrial,
+    isTrial: false,
     trialExpiresAt: trialExpiresAt ?? null,
     freeExpired,
     freeExpiresAt,
