@@ -26,7 +26,7 @@ export {
   updatePublishSettings,
 } from './writing';
 
-export { validateInviteCode, signupWithInvite, consumeInviteCode, activateTrial } from './auth';
+export { signup } from './auth';
 
 export { fetchCurrentUsage, getProUpgradeUrl, createPortalSession } from './billing';
 export type { UsageInfo } from './billing';

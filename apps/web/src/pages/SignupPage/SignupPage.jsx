@@ -1,37 +1,18 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import posthog from 'posthog-js';
-import { validateInviteCode, signupWithInvite, consumeInviteCode } from '@hermes/api';
+import { signup } from '@hermes/api';
 import useAuth from '../../hooks/useAuth';
-import { supabase } from '../../lib/supabase';
 import styles from './SignupPage.module.css';
 
 export default function SignupPage() {
   const { session, signIn, signInWithGoogle } = useAuth();
-  const [step, setStep] = useState('invite'); // 'invite' | 'signup' | 'done'
-  const [inviteCode, setInviteCode] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   if (session) return <Navigate to="/" replace />;
-
-  const handleInviteSubmit = async (e) => {
-    e.preventDefault();
-    if (loading) return;
-    setError('');
-    setLoading(true);
-
-    try {
-      await validateInviteCode(inviteCode);
-      setStep('signup');
-    } catch (err) {
-      setError(err.message || 'Invalid or expired invite code');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -40,36 +21,17 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      await signupWithInvite(email, password, inviteCode);
+      await signup(email, password);
       posthog.capture('signup_completed', { method: 'email' });
 
       // Auto-login: try signing in immediately
       const { error: signInError } = await signIn(email, password);
       if (signInError) {
-        // Account created but can't sign in (email confirmation required, or network issue)
-        setStep('done');
-        return;
+        setError('Account created but sign-in failed. Please go to login.');
       }
       // signIn succeeded → session updates via onAuthStateChange → Navigate guard redirects
     } catch (err) {
       setError(err.message || 'Failed to create account');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendVerification = async () => {
-    if (loading) return;
-    setError('');
-    setLoading(true);
-    try {
-      const { error: resendError } = await supabase.auth.resend({
-        type: 'signup',
-        email,
-      });
-      if (resendError) throw resendError;
-    } catch (err) {
-      setError(err.message || 'Failed to resend verification email');
     } finally {
       setLoading(false);
     }
@@ -81,74 +43,13 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const result = await consumeInviteCode(inviteCode);
       posthog.capture('signup_completed', { method: 'google' });
-      if (result.trialDays > 0) {
-        sessionStorage.setItem('pendingTrialDays', String(result.trialDays));
-      }
       signInWithGoogle();
     } catch (err) {
-      setError(err.message || 'Invalid or expired invite code');
+      setError(err.message || 'Failed to sign up with Google');
       setLoading(false);
     }
   };
-
-  if (step === 'done') {
-    return (
-      <main className={styles.page}>
-        <div className={styles.card}>
-          <h1 className={styles.title}>Check your email</h1>
-          <p className={styles.confirmText}>
-            We sent a verification link to <strong>{email}</strong>.
-            Click the link in your email to activate your account,
-            then come back to log in.
-          </p>
-          {error && <p className={styles.error}>{error}</p>}
-          <button
-            type="button"
-            className={styles.primaryBtn}
-            disabled={loading}
-            onClick={handleResendVerification}
-          >
-            {loading ? 'Sending...' : 'Resend email'}
-          </button>
-          <Link to="/login" className={styles.backLink}>Go to login</Link>
-        </div>
-      </main>
-    );
-  }
-
-  if (step === 'invite') {
-    return (
-      <main className={styles.page}>
-        <form className={styles.card} onSubmit={handleInviteSubmit}>
-          <h1 className={styles.title}>Sign up</h1>
-          <p className={styles.confirmText}>
-            Hermes is in early beta. Enter your invite code to create an account.
-          </p>
-          {error && <p className={styles.error}>{error}</p>}
-          <label className={styles.label}>
-            Invite code
-            <input
-              type="text"
-              value={inviteCode}
-              onChange={(e) => setInviteCode(e.target.value)}
-              className={styles.input}
-              required
-              autoFocus
-              autoComplete="off"
-            />
-          </label>
-          <button type="submit" className={styles.primaryBtn} disabled={loading}>
-            {loading ? 'Checking...' : 'Continue'}
-          </button>
-          <p className={styles.switchText}>
-            Already have an account? <Link to="/login" className={styles.switchLink}>Log in</Link>
-          </p>
-        </form>
-      </main>
-    );
-  }
 
   const passwordChecks = {
     length: password.length >= 8,
@@ -157,11 +58,10 @@ export default function SignupPage() {
   };
   const passwordValid = passwordChecks.length && passwordChecks.number && passwordChecks.symbol;
 
-  // step === 'signup'
   return (
     <main className={styles.page}>
       <form className={styles.card} onSubmit={handleSignup}>
-        <h1 className={styles.title}>Create your account</h1>
+        <h1 className={styles.title}>Sign up</h1>
         {error && <p className={styles.error}>{error}</p>}
         <label className={styles.label}>
           Email

@@ -1,70 +1,18 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod/v4';
-import rateLimit from 'express-rate-limit';
 import { supabase } from '../lib/supabase.js';
-import { requireAuth } from '../middleware/auth.js';
 import logger from '../lib/logger.js';
 import { FREE_TIER_DAYS } from '../lib/limits.js';
 
 const router = Router();
 
-const useInviteLimit = rateLimit({
-  windowMs: 60_000,
-  max: 3,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const ValidateInviteSchema = z.object({
-  inviteCode: z.string().trim().min(1),
-});
-
 const SignupSchema = z.object({
   email: z.email(),
   password: z.string().min(8),
-  inviteCode: z.string().trim().min(1),
-});
-
-const UseInviteSchema = z.object({
-  inviteCode: z.string().trim().min(1),
-});
-
-const ActivateTrialSchema = z.object({
-  trialDays: z.number().int().min(1).max(365),
-});
-
-// POST /api/auth/validate-invite
-// Check if an invite code is valid (does NOT increment usage)
-router.post('/validate-invite', async (req: Request, res: Response) => {
-  const parsed = ValidateInviteSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid request' });
-    return;
-  }
-
-  const { inviteCode } = parsed.data;
-
-  const { data, error } = await supabase
-    .from('invite_codes')
-    .select('current_uses, max_uses')
-    .eq('code', inviteCode)
-    .single();
-
-  if (error || !data) {
-    res.status(403).json({ error: 'Invalid or expired invite code' });
-    return;
-  }
-
-  if (data.current_uses >= data.max_uses) {
-    res.status(403).json({ error: 'This invite code has been fully claimed' });
-    return;
-  }
-
-  res.json({ valid: true });
 });
 
 // POST /api/auth/signup
-// Create a user account with invite code validation (email/password flow)
+// Create a user account (email/password, auto-confirmed)
 router.post('/signup', async (req: Request, res: Response) => {
   const parsed = SignupSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -76,36 +24,7 @@ router.post('/signup', async (req: Request, res: Response) => {
     return;
   }
 
-  const { email, password, inviteCode } = parsed.data;
-
-  // Pre-check: distinguish "not found" from "fully claimed" before consuming
-  const { data: codeRow, error: lookupError } = await supabase
-    .from('invite_codes')
-    .select('current_uses, max_uses')
-    .eq('code', inviteCode)
-    .single();
-
-  if (lookupError || !codeRow) {
-    res.status(403).json({ error: 'Invalid or expired invite code' });
-    return;
-  }
-
-  if (codeRow.current_uses >= codeRow.max_uses) {
-    res.status(403).json({ error: 'This invite code has been fully claimed' });
-    return;
-  }
-
-  // Atomically consume an invite code use (v2 returns trial info)
-  const { data: trialResult, error: rpcError } = await supabase.rpc('use_invite_code_v2', {
-    code_input: inviteCode,
-  });
-
-  if (rpcError || trialResult === -1) {
-    res.status(403).json({ error: 'Invalid or expired invite code' });
-    return;
-  }
-
-  const trialDays = trialResult as number; // 0 = standard, >0 = trial days
+  const { email, password } = parsed.data;
 
   // Create user (auto-confirmed)
   const { data: createData, error: createError } = await supabase.auth.admin.createUser({
@@ -115,25 +34,18 @@ router.post('/signup', async (req: Request, res: Response) => {
   });
 
   if (createError) {
-    // Roll back the invite code usage
-    const { error: rollbackError } = await supabase.rpc('rollback_invite_code', { code_input: inviteCode });
-    if (rollbackError) {
-      logger.error({ inviteCode, error: rollbackError.message }, 'Failed to rollback invite code usage');
-    }
-
     const message = createError.message?.includes('already been registered')
       ? 'An account with this email already exists'
       : createError.message || 'Failed to create account';
 
-    logger.warn({ email, error: createError.message }, 'User creation failed, rolled back invite code');
+    logger.warn({ email, error: createError.message }, 'User creation failed');
     res.status(400).json({ error: message });
     return;
   }
 
-  // Stamp trial_expires_at on every new user (default to FREE_TIER_DAYS if no trial code)
+  // Stamp trial_expires_at on every new user
   if (createData.user) {
-    const effectiveDays = trialDays > 0 ? trialDays : FREE_TIER_DAYS;
-    const expiresAt = new Date(Date.now() + effectiveDays * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + FREE_TIER_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const { error: updateError } = await supabase
       .from('user_profiles')
       .update({ trial_expires_at: expiresAt })
@@ -144,88 +56,7 @@ router.post('/signup', async (req: Request, res: Response) => {
     }
   }
 
-  logger.info({ email, trialDays }, 'User created via invite code');
-  res.json({ success: true });
-});
-
-// POST /api/auth/use-invite
-// Consume an invite code use (for Google OAuth flow — called before redirect)
-router.post('/use-invite', useInviteLimit, async (req: Request, res: Response) => {
-  const parsed = UseInviteSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid request' });
-    return;
-  }
-
-  const { inviteCode } = parsed.data;
-
-  // Pre-check: distinguish "not found" from "fully claimed" before consuming
-  const { data: codeRow, error: lookupError } = await supabase
-    .from('invite_codes')
-    .select('current_uses, max_uses')
-    .eq('code', inviteCode)
-    .single();
-
-  if (lookupError || !codeRow) {
-    res.status(403).json({ error: 'Invalid or expired invite code' });
-    return;
-  }
-
-  if (codeRow.current_uses >= codeRow.max_uses) {
-    res.status(403).json({ error: 'This invite code has been fully claimed' });
-    return;
-  }
-
-  const { data: trialResult, error: rpcError } = await supabase.rpc('use_invite_code_v2', {
-    code_input: inviteCode,
-  });
-
-  if (rpcError || trialResult === -1) {
-    res.status(403).json({ error: 'Invalid or expired invite code' });
-    return;
-  }
-
-  const trialDays = (trialResult as number) || FREE_TIER_DAYS;
-  res.json({ success: true, trialDays });
-});
-
-// POST /api/auth/activate-trial
-// Activate trial for the current user (Google OAuth flow — called after redirect)
-router.post('/activate-trial', requireAuth, async (req: Request, res: Response) => {
-  const parsed = ActivateTrialSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid request' });
-    return;
-  }
-
-  const userId = req.user!.id;
-  const { trialDays } = parsed.data;
-
-  // Idempotent: skip if trial_expires_at is already set
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('trial_expires_at')
-    .eq('id', userId)
-    .single();
-
-  if (profile?.trial_expires_at) {
-    res.json({ success: true, alreadyActive: true });
-    return;
-  }
-
-  const expiresAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
-  const { error } = await supabase
-    .from('user_profiles')
-    .update({ trial_expires_at: expiresAt })
-    .eq('id', userId);
-
-  if (error) {
-    logger.error({ userId, error: error.message }, 'Failed to activate trial');
-    res.status(500).json({ error: 'Failed to activate trial' });
-    return;
-  }
-
-  logger.info({ userId, trialDays }, 'Trial activated');
+  logger.info({ email }, 'User created');
   res.json({ success: true });
 });
 
