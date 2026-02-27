@@ -7,8 +7,8 @@ import Link from '@tiptap/extension-link';
 import { Markdown } from '@tiptap/markdown';
 import { Slice } from '@tiptap/pm/model';
 import { IS_MOBILE, IS_TAURI } from '../../lib/platform';
-import { loadSettings } from '../../lib/settingsStorage';
-import { loadWorkspacePages, saveWorkspacePages } from '../../lib/workspaceStorage';
+import { loadSettings, saveSettings } from '../../lib/settingsStorage';
+import { getDefaultWorkspace, listWorkspaceProjects, loadWorkspacePages, saveWorkspacePages } from '../../lib/workspaceStorage';
 import {
   loadProjectRegistry,
   saveProjectRegistry,
@@ -17,6 +17,7 @@ import {
   createProject as createProjectInStorage,
   renameProject as renameProjectInStorage,
   deleteProject as deleteProjectInStorage,
+  reconcileWorkspaceProjects,
 } from '../../lib/projectStorage';
 import useFocusMode from './useFocusMode';
 import useHighlights, { getDocFlatText, flatOffsetToPos } from './useHighlights';
@@ -251,9 +252,39 @@ export default function FocusPage() {
           const settings = await loadSettings();
           if (cancelled) return;
 
-          const configuredWorkspace = settings.workspacePath?.trim() || '';
+          let configuredWorkspace = settings.workspacePath?.trim() || '';
+
+          // Auto-provision default workspace on first launch
+          if (!configuredWorkspace) {
+            try {
+              const defaultPath = await getDefaultWorkspace();
+              if (cancelled) return;
+              if (defaultPath) {
+                configuredWorkspace = defaultPath;
+                settings.workspacePath = defaultPath;
+                await saveSettings(settings);
+              }
+            } catch {
+              // Fall through — user can manually set workspace later
+            }
+          }
+
           setWorkspacePath(configuredWorkspace);
           workspacePathRef.current = configuredWorkspace;
+
+          // Reconcile workspace folders with project registry
+          if (configuredWorkspace) {
+            try {
+              const folderNames = await listWorkspaceProjects(configuredWorkspace);
+              if (cancelled) return;
+              if (folderNames.length > 0) {
+                const reconciled = reconcileWorkspaceProjects(folderNames);
+                setProjectRegistry(reconciled);
+              }
+            } catch {
+              // non-critical
+            }
+          }
 
           if (configuredWorkspace) {
             const projectPath = activeProject
@@ -510,7 +541,7 @@ export default function FocusPage() {
     }
   }, [editor, activeProjectId, clearHighlight]);
 
-  const handleSettingsSaved = useCallback((settings) => {
+  const handleSettingsSaved = useCallback(async (settings) => {
     const nextWorkspacePath = settings?.workspacePath?.trim() || '';
     if (nextWorkspacePath === workspacePathRef.current) return;
 
@@ -521,6 +552,20 @@ export default function FocusPage() {
 
     setWorkspacePath(nextWorkspacePath);
     workspacePathRef.current = nextWorkspacePath;
+
+    // Reconcile workspace folders with project registry
+    if (nextWorkspacePath && IS_TAURI) {
+      try {
+        const folderNames = await listWorkspaceProjects(nextWorkspacePath);
+        if (folderNames.length > 0) {
+          const reconciled = reconcileWorkspaceProjects(folderNames);
+          setProjectRegistry(reconciled);
+        }
+      } catch {
+        // non-critical
+      }
+    }
+
     setInitialLoaded(false);
   }, []);
 

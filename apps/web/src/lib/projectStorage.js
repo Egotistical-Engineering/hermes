@@ -194,6 +194,24 @@ export function deleteProject(projectId) {
   return registry;
 }
 
+export function reconcileWorkspaceProjects(folderNames) {
+  const registry = loadProjectRegistry();
+  const existingNames = new Set(registry.projects.map((p) => p.name));
+  let added = false;
+
+  for (const name of folderNames) {
+    if (!existingNames.has(name)) {
+      registry.projects.push(createProjectEntry(name));
+      added = true;
+    }
+  }
+
+  if (added) {
+    saveRegistryToLocal(registry);
+  }
+  return registry;
+}
+
 export function setActiveProject(projectId) {
   const registry = loadProjectRegistry();
   if (registry.projects.some((p) => p.id === projectId)) {

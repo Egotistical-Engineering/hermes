@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegram/nicegram.github.io/refs/heads/main/nicegram/tauri-conf.schema.json",
   "productName": "Hermes",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.dearhermes.app",
   "build": {
     "beforeDevCommand": "npm run dev -w @hermes/web",

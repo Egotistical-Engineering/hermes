@@ -16,6 +16,18 @@ export function normalizePages(rawPages) {
   return pages;
 }
 
+export async function listWorkspaceProjects(workspacePath) {
+  if (!IS_TAURI || !workspacePath) return [];
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke('list_workspace_projects', { workspacePath });
+}
+
+export async function getDefaultWorkspace() {
+  if (!IS_TAURI) return null;
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke('get_default_workspace');
+}
+
 export async function pickWorkspaceFolder() {
   if (!IS_TAURI) return null;
   const { invoke } = await import('@tauri-apps/api/core');

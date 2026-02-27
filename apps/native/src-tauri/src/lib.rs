@@ -135,6 +135,61 @@ fn sync_workspace_index(workspace_path: &str, pages: &HashMap<String, String>) -
 }
 
 #[tauri::command]
+fn list_workspace_projects(workspace_path: String) -> Result<Vec<String>, String> {
+    let dir = Path::new(&workspace_path);
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut projects = Vec::new();
+    let entries = fs::read_dir(dir)
+        .map_err(|err| format!("Failed reading workspace directory: {err}"))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|err| format!("Failed reading entry: {err}"))?;
+        let path = entry.path();
+        if path.is_dir() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            // Skip hidden directories like .hermes
+            if !name.starts_with('.') {
+                projects.push(name);
+            }
+        }
+    }
+
+    projects.sort();
+    Ok(projects)
+}
+
+#[tauri::command]
+fn get_default_workspace() -> Result<String, String> {
+    let home = std::env::var("HOME")
+        .map_err(|_| "Could not determine home directory".to_string())?;
+    let docs = Path::new(&home).join("Documents").join("Hermes");
+    fs::create_dir_all(&docs)
+        .map_err(|err| format!("Failed creating default workspace {}: {err}", docs.display()))?;
+    Ok(docs.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn open_in_finder(path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&path)
+            .spawn()
+            .map_err(|err| format!("Failed to open {path}: {err}"))?;
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        Err("Open in Finder is currently implemented for macOS only.".to_string())
+    }
+}
+
+#[tauri::command]
 fn pick_workspace_folder() -> Result<Option<String>, String> {
     #[cfg(target_os = "macos")]
     {
@@ -236,6 +291,11 @@ fn save_workspace_chat(workspace_path: String, chat_json: String) -> Result<(), 
 }
 
 #[tauri::command]
+fn has_debug_tools() -> bool {
+    cfg!(feature = "debug-tools")
+}
+
+#[tauri::command]
 fn toggle_devtools(window: tauri::WebviewWindow) -> Result<(), String> {
     #[cfg(feature = "debug-tools")]
     {
@@ -261,7 +321,11 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_os::init())
         .invoke_handler(tauri::generate_handler![
+            has_debug_tools,
             toggle_devtools,
+            list_workspace_projects,
+            get_default_workspace,
+            open_in_finder,
             pick_workspace_folder,
             load_workspace_pages,
             save_workspace_pages,

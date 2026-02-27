@@ -130,6 +130,7 @@ export default function SettingsPanel({ isOpen, onClose, onSettingsSaved }) {
   const [originalKeys, setOriginalKeys] = useState({ anthropic: '', openai: '', workspace: '' });
   const [pickingWorkspace, setPickingWorkspace] = useState(false);
   const [devtoolsMessage, setDevtoolsMessage] = useState('');
+  const [hasDebugTools, setHasDebugTools] = useState(false);
   const panelRef = useRef(null);
 
   // Load keys when panel opens
@@ -149,6 +150,17 @@ export default function SettingsPanel({ isOpen, onClose, onSettingsSaved }) {
         openai: settings.openaiApiKey || '',
         workspace: settings.workspacePath || '',
       });
+
+      // Check if debug tools are available
+      if (IS_TAURI) {
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          const result = await invoke('has_debug_tools');
+          if (!cancelled) setHasDebugTools(!!result);
+        } catch {
+          // not available
+        }
+      }
     })();
 
     return () => {
@@ -180,17 +192,18 @@ export default function SettingsPanel({ isOpen, onClose, onSettingsSaved }) {
       const selected = await pickWorkspaceFolder();
       if (typeof selected === 'string' && selected.trim()) {
         setWorkspacePath(selected);
+        await saveField('workspacePath', selected);
       }
     } finally {
       setPickingWorkspace(false);
     }
-  }, []);
+  }, [saveField]);
 
   const handleOpenWorkspace = useCallback(async () => {
     if (!IS_TAURI || !workspacePath) return;
     try {
-      const { open } = await import('@tauri-apps/plugin-shell');
-      await open(workspacePath);
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_in_finder', { path: workspacePath });
     } catch {
       // no-op
     }
@@ -309,7 +322,7 @@ export default function SettingsPanel({ isOpen, onClose, onSettingsSaved }) {
           {activeTab === 'workspace' && (
             <>
               <span className={styles.hint}>
-                When set, drafts are saved as markdown files in <code>notes/</code> and indexed in <code>.hermes/index.sqlite</code>.
+                Drafts are saved as markdown files per project folder and indexed in <code>.hermes/index.sqlite</code>.
               </span>
 
               <InlineSaveInput
@@ -333,7 +346,7 @@ export default function SettingsPanel({ isOpen, onClose, onSettingsSaved }) {
                 </div>
               )}
 
-              {IS_TAURI && (
+              {hasDebugTools && (
                 <>
                   <button className={styles.debugBtn} onClick={handleToggleDevtools} type="button">
                     Toggle DevTools (Debug)
