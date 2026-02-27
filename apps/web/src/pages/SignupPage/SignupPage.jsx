@@ -91,7 +91,7 @@ export default function SignupPage() {
             <span className={passwordChecks.symbol ? styles.met : styles.unmet}>Contains a symbol</span>
           </div>
         )}
-        <button type="submit" className={styles.primaryBtn} disabled={loading || !passwordValid}>
+        <button type="submit" className={styles.primaryBtn} disabled={loading || !email || !passwordValid}>
           {loading ? 'Creating account...' : 'Sign up'}
         </button>
         <div className={styles.divider}>or</div>
