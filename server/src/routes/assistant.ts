@@ -1,16 +1,14 @@
 import { Router, Request, Response } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod/v4';
 import { query } from '../lib/db.js';
 import { requireAuth } from '../middleware/auth.js';
 import logger from '../lib/logger.js';
 import { mcpManager } from '../lib/mcp.js';
 import type { UserMcpServerConfig } from '../lib/mcp.js';
+import { getLlmProvider } from '../lib/llm/index.js';
+import type { LlmRoundResult, LlmTool, LlmToolCall, LlmToolResult } from '../lib/llm/index.js';
 
 const router = Router();
-
-const anthro = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const MODEL = 'claude-sonnet-4-6';
 
 type SourceData = {
   url: string;
@@ -40,7 +38,7 @@ const ChatSchema = z.object({
   activeTab: z.string().default('coral'),
 });
 
-const HIGHLIGHT_TOOL: Anthropic.Messages.Tool = {
+const HIGHLIGHT_TOOL: LlmTool = {
   name: 'add_highlight',
   description:
     "Highlight a passage in the writer's text to ask a question, make a suggestion, or propose an edit. " +
@@ -72,7 +70,7 @@ const HIGHLIGHT_TOOL: Anthropic.Messages.Tool = {
   },
 };
 
-const CITE_SOURCE_TOOL: Anthropic.Messages.Tool = {
+const CITE_SOURCE_TOOL: LlmTool = {
   name: 'cite_source',
   description:
     'Cite a source you referenced or found. Call this for each distinct source URL you mention.',
@@ -193,7 +191,7 @@ router.post('/chat', requireAuth, async (req: Request, res: Response) => {
   // MCP tools are available to all authenticated users (open-source, no paid tiers)
   const hasMcpAccess = true;
 
-  const tools: Anthropic.Messages.Tool[] = [HIGHLIGHT_TOOL, CITE_SOURCE_TOOL];
+  const tools: LlmTool[] = [HIGHLIGHT_TOOL, CITE_SOURCE_TOOL];
   if (hasMcpAccess) {
     tools.push(...mcpManager.getTools());
     // Load user's configured MCP servers
@@ -240,7 +238,7 @@ router.post('/chat', requireAuth, async (req: Request, res: Response) => {
     });
   }
 
-  // Build messages for Anthropic
+  // Build messages for the LLM provider
   const userMessage: AssistantMessage = {
     role: 'user',
     content: message,
@@ -281,75 +279,63 @@ router.post('/chat', requireAuth, async (req: Request, res: Response) => {
   res.flushHeaders();
 
   try {
-    const anthropicMessages = allMessages.map((m) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    }));
-
     let fullTextResponse = '';
     const highlights: HighlightData[] = [];
     const sources: SourceData[] = [];
     let highlightCounter = 0;
 
+    const provider = getLlmProvider();
+    const conversation = provider.createConversation({
+      system: systemContent,
+      messages: allMessages.map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      })),
+      tools,
+      maxTokens: getMaxTokens(pages),
+      temperature: 0.7,
+    });
+
     // Tool-use loop
     const MAX_TOOL_ROUNDS = 10;
-    let messages: Anthropic.Messages.MessageParam[] = anthropicMessages;
     let continueLoop = true;
     let toolRound = 0;
+    const totalUsage = { inputTokens: 0, outputTokens: 0 };
 
-    // Anthropic API timeout: 120s per round
-    const ANTHROPIC_TIMEOUT_MS = 120_000;
+    // LLM API timeout: 120s per round
+    const LLM_TIMEOUT_MS = 120_000;
 
     while (continueLoop && !clientDisconnected) {
       const timeoutController = new AbortController();
-      const timeoutId = setTimeout(() => timeoutController.abort(), ANTHROPIC_TIMEOUT_MS);
+      const timeoutId = setTimeout(() => timeoutController.abort(), LLM_TIMEOUT_MS);
 
-      let response;
+      let roundResult: LlmRoundResult | null = null;
+      const roundToolCalls: LlmToolCall[] = [];
+
       try {
-        response = await anthro.messages.create({
-          model: MODEL,
-          max_tokens: getMaxTokens(pages),
-          temperature: 0.7,
-          system: systemContent,
-          tools,
-          messages,
-          stream: true,
-        }, { signal: timeoutController.signal });
-      } catch (err: any) {
-        clearTimeout(timeoutId);
-        throw err;
-      }
-
-      let currentToolName = '';
-      let currentToolInput = '';
-      let currentToolId = '';
-      const contentBlocks: Anthropic.Messages.ContentBlock[] = [];
-      let stopReason: string | null = null;
-
-      for await (const event of response) {
-        if (clientDisconnected) break;
-
-        if (event.type === 'content_block_start') {
-          if (event.content_block.type === 'text') {
-            // Starting a text block
-          } else if (event.content_block.type === 'tool_use') {
-            currentToolName = event.content_block.name;
-            currentToolId = event.content_block.id;
-            currentToolInput = '';
+        const round = conversation.streamRound(timeoutController.signal);
+        while (true) {
+          const step = await round.next();
+          if (step.done) {
+            roundResult = step.value;
+            break;
           }
-        } else if (event.type === 'content_block_delta') {
-          if (event.delta.type === 'text_delta') {
-            fullTextResponse += event.delta.text;
-            safeSseWrite(`event: text\ndata: ${JSON.stringify({ chunk: event.delta.text })}\n\n`);
-          } else if (event.delta.type === 'input_json_delta') {
-            currentToolInput += event.delta.partial_json;
+          if (clientDisconnected) {
+            await round.return({ stopReason: 'end', usage: null }).catch(() => {});
+            break;
           }
-        } else if (event.type === 'content_block_stop') {
-          if (currentToolName && currentToolInput) {
-            // Handle highlight tool — extract data and emit SSE event
-            if (currentToolName === 'add_highlight') {
-              try {
-                const input = JSON.parse(currentToolInput);
+
+          const event = step.value;
+          if (event.type === 'text') {
+            fullTextResponse += event.text;
+            safeSseWrite(`event: text\ndata: ${JSON.stringify({ chunk: event.text })}\n\n`);
+          } else if (event.type === 'tool_call') {
+            roundToolCalls.push(event.call);
+
+            if (event.call.name === 'add_highlight') {
+              // Handle highlight tool — extract data and emit SSE event
+              const input = event.call.input as Partial<HighlightData>;
+              if (input.type && input.matchText && input.comment) {
                 const highlight: HighlightData = {
                   id: `h${++highlightCounter}-${Date.now()}`,
                   type: input.type,
@@ -359,44 +345,37 @@ router.post('/chat', requireAuth, async (req: Request, res: Response) => {
                 };
                 highlights.push(highlight);
                 safeSseWrite(`event: highlight\ndata: ${JSON.stringify(highlight)}\n\n`);
-              } catch {
+              } else {
                 logger.warn({ projectId }, 'Failed to parse highlight tool input');
               }
-            } else if (currentToolName === 'cite_source') {
-              try {
-                const input = JSON.parse(currentToolInput);
+            } else if (event.call.name === 'cite_source') {
+              const input = event.call.input as Partial<SourceData>;
+              if (input.url && input.title) {
                 const source: SourceData = { url: input.url, title: input.title };
                 sources.push(source);
                 safeSseWrite(`event: source\ndata: ${JSON.stringify(source)}\n\n`);
-              } catch {
+              } else {
                 logger.warn({ projectId }, 'Failed to parse cite_source tool input');
               }
-            } else if (mcpManager.isMcpToolForUser(currentToolName, userId)) {
+            } else if (mcpManager.isMcpToolForUser(event.call.name, userId)) {
               // Notify frontend that an MCP tool is being invoked
-              const server = mcpManager.serverName(currentToolName);
-              safeSseWrite(`event: tool_status\ndata: ${JSON.stringify({ tool: currentToolName, server, status: 'running' })}\n\n`);
+              const server = mcpManager.serverName(event.call.name);
+              safeSseWrite(`event: tool_status\ndata: ${JSON.stringify({ tool: event.call.name, server, status: 'running' })}\n\n`);
             }
-
-            // Always push tool_use block for the result loop
-            contentBlocks.push({
-              type: 'tool_use',
-              id: currentToolId,
-              name: currentToolName,
-              input: JSON.parse(currentToolInput || '{}'),
-            } as Anthropic.Messages.ToolUseBlock);
-            currentToolName = '';
-            currentToolInput = '';
           }
-        } else if (event.type === 'message_delta') {
-          stopReason = event.delta.stop_reason;
         }
+      } finally {
+        clearTimeout(timeoutId);
       }
 
-      clearTimeout(timeoutId);
+      if (roundResult?.usage) {
+        totalUsage.inputTokens += roundResult.usage.inputTokens;
+        totalUsage.outputTokens += roundResult.usage.outputTokens;
+      }
 
       if (clientDisconnected) break;
 
-      if (stopReason === 'tool_use') {
+      if (roundResult?.stopReason === 'tool_use') {
         toolRound++;
         if (toolRound >= MAX_TOOL_ROUNDS) {
           logger.warn({ projectId, toolRound }, 'Max tool rounds reached — stopping loop');
@@ -405,56 +384,48 @@ router.post('/chat', requireAuth, async (req: Request, res: Response) => {
         }
 
         // Build tool results — run MCP calls in parallel
-        const toolBlocks = contentBlocks.filter(
-          (b): b is Anthropic.Messages.ToolUseBlock => b.type === 'tool_use',
-        );
-
-        const toolResults: Anthropic.Messages.ToolResultBlockParam[] = await Promise.all(
-          toolBlocks.map(async (block) => {
-            if (block.name === 'add_highlight') {
+        const toolResults: LlmToolResult[] = await Promise.all(
+          roundToolCalls.map(async (call): Promise<LlmToolResult> => {
+            if (call.name === 'add_highlight') {
               return {
-                type: 'tool_result' as const,
-                tool_use_id: block.id,
+                toolCallId: call.id,
                 content: 'Highlight added successfully.',
+                isError: false,
               };
             }
 
-            if (block.name === 'cite_source') {
-              const input = block.input as { url?: string; title?: string };
+            if (call.name === 'cite_source') {
+              const input = call.input as { url?: string; title?: string };
               return {
-                type: 'tool_result' as const,
-                tool_use_id: block.id,
+                toolCallId: call.id,
                 content: `Source cited: ${input.title || input.url}`,
+                isError: false,
               };
             }
 
             // MCP tool (system or user)
-            const result = await mcpManager.callToolForUser(
-              block.name,
-              block.input as Record<string, unknown>,
-              userId,
-            );
-            const server = mcpManager.serverName(block.name);
+            const result = await mcpManager.callToolForUser(call.name, call.input, userId);
+            const server = mcpManager.serverName(call.name);
             const status = result.isError ? 'error' : 'done';
-            safeSseWrite(`event: tool_status\ndata: ${JSON.stringify({ tool: block.name, server, status })}\n\n`);
+            safeSseWrite(`event: tool_status\ndata: ${JSON.stringify({ tool: call.name, server, status })}\n\n`);
             return {
-              type: 'tool_result' as const,
-              tool_use_id: block.id,
+              toolCallId: call.id,
               content: result.content,
-              is_error: result.isError,
+              isError: result.isError,
             };
           }),
         );
 
-        messages = [
-          ...messages,
-          { role: 'assistant', content: contentBlocks },
-          { role: 'user', content: toolResults },
-        ];
+        conversation.addToolResults(toolResults);
       } else {
         continueLoop = false;
       }
     }
+
+    logger.info(
+      { projectId, provider: provider.name, usage: totalUsage, toolRounds: toolRound },
+      'Assistant stream complete',
+    );
 
     // Always save conversation and highlights, even if client disconnected
     const assistantMessage: AssistantMessage = {
