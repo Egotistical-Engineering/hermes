@@ -4,7 +4,7 @@ import * as Sentry from '@sentry/node';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { toNodeHandler } from 'better-auth/node';
 import assistantRouter from './routes/assistant.js';
 import projectsRouter from './routes/projects.js';
@@ -86,7 +86,9 @@ const assistantLimiter = rateLimit({
   keyGenerator: async (req) => {
     const user = await getOptionalUser(req);
     if (user) return `user:${user.id}`;
-    return req.ip || 'unknown';
+    // ipKeyGenerator normalizes IPv6 addresses to their /56 subnet so v6
+    // clients can't rotate addresses to dodge the limit (ERR_ERL_KEY_GEN_IPV6)
+    return req.ip ? ipKeyGenerator(req.ip) : 'unknown';
   },
 });
 
