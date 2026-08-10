@@ -4,8 +4,5 @@
   "version": "0.0.0",
   "type": "module",
   "main": "src/index.ts",
-  "sideEffects": false,
-  "dependencies": {
-    "@supabase/supabase-js": "^2.95.3"
-  }
+  "sideEffects": false
 }

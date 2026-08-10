@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod/v4';
-import { supabase } from '../lib/supabase.js';
+import { query } from '../lib/db.js';
 import { requireAuth } from '../middleware/auth.js';
 import logger from '../lib/logger.js';
 import { mcpManager } from '../lib/mcp.js';
@@ -150,37 +150,16 @@ function getMaxTokens(pages: Record<string, string>): number {
   return 2048;
 }
 
-async function loadPriorEssayRewrites(priorEssayProjectIds: string[] = []): Promise<string[]> {
-  if (!priorEssayProjectIds.length) return [];
-
-  const { data, error } = await supabase
-    .from('drafts')
-    .select('project_id, rewrite, skeleton, version')
-    .in('project_id', priorEssayProjectIds)
-    .order('version', { ascending: false });
-
-  if (error || !data) return [];
-
-  const latestByProject = new Map<string, string>();
-  for (const row of data) {
-    if (!latestByProject.has(row.project_id)) {
-      latestByProject.set(row.project_id, row.rewrite || row.skeleton || '');
-    }
-  }
-
-  return Array.from(latestByProject.values()).filter(Boolean);
-}
-
 async function getOwnedProject(projectId: string, userId: string) {
-  const { data, error } = await supabase
-    .from('projects')
-    .select('id, user_id, status')
-    .eq('id', projectId)
-    .eq('user_id', userId)
-    .single();
-
-  if (error || !data) return null;
-  return data;
+  try {
+    const { rows } = await query(
+      'select id, user_id, status from projects where id = $1 and user_id = $2',
+      [projectId, userId],
+    );
+    return rows[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 router.post('/chat', requireAuth, async (req: Request, res: Response) => {
@@ -203,22 +182,13 @@ router.post('/chat', requireAuth, async (req: Request, res: Response) => {
     return;
   }
 
-  // Load conversation history, brain dumps, and prior essays in parallel
-  const [{ data: convo }, { data: brainDump }] = await Promise.all([
-    supabase
-      .from('assistant_conversations')
-      .select('messages')
-      .eq('project_id', projectId)
-      .single(),
-    supabase
-      .from('brain_dumps')
-      .select('prior_essays')
-      .eq('project_id', projectId)
-      .single(),
-  ]);
-
-  const existingMessages: AssistantMessage[] = ((convo?.messages as AssistantMessage[]) || []).slice(-30);
-  const priorEssays = await loadPriorEssayRewrites((brainDump?.prior_essays || []) as string[]);
+  // Load conversation history
+  const { rows: convoRows } = await query(
+    'select messages from assistant_conversations where project_id = $1',
+    [projectId],
+  );
+  const existingMessages: AssistantMessage[] = ((convoRows[0]?.messages as AssistantMessage[]) || []).slice(-30);
+  const priorEssays: string[] = [];
 
   // MCP tools are available to all authenticated users (open-source, no paid tiers)
   const hasMcpAccess = true;
@@ -227,11 +197,10 @@ router.post('/chat', requireAuth, async (req: Request, res: Response) => {
   if (hasMcpAccess) {
     tools.push(...mcpManager.getTools());
     // Load user's configured MCP servers
-    const { data: userServers } = await supabase
-      .from('user_mcp_servers')
-      .select('id, name, url, headers, enabled')
-      .eq('user_id', userId)
-      .eq('enabled', true);
+    const { rows: userServers } = await query(
+      'select id, name, url, headers, enabled from user_mcp_servers where user_id = $1 and enabled = true',
+      [userId],
+    );
     if (userServers?.length) {
       const configs: UserMcpServerConfig[] = userServers.map((s) => ({
         id: s.id,
@@ -281,16 +250,12 @@ router.post('/chat', requireAuth, async (req: Request, res: Response) => {
   const allMessages = [...existingMessages, userMessage];
 
   // Save user message immediately
-  await supabase
-    .from('assistant_conversations')
-    .upsert(
-      {
-        project_id: projectId,
-        messages: allMessages,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'project_id' },
-    );
+  await query(
+    `insert into assistant_conversations (project_id, messages, updated_at)
+     values ($1, $2, now())
+     on conflict (project_id) do update set messages = excluded.messages, updated_at = now()`,
+    [projectId, JSON.stringify(allMessages)],
+  );
 
   // Track client disconnect for SSE cleanup
   let clientDisconnected = false;
@@ -500,24 +465,28 @@ router.post('/chat', requireAuth, async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
     };
 
-    await supabase
-      .from('assistant_conversations')
-      .upsert(
-        {
-          project_id: projectId,
-          messages: [...allMessages, assistantMessage],
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'project_id' },
-      );
+    await query(
+      `insert into assistant_conversations (project_id, messages, updated_at)
+       values ($1, $2, now())
+       on conflict (project_id) do update set messages = excluded.messages, updated_at = now()`,
+      [projectId, JSON.stringify([...allMessages, assistantMessage])],
+    );
 
     // Atomically append highlights to project (capped at 200)
     if (highlights.length > 0) {
-      await supabase.rpc('append_highlights', {
-        p_project_id: projectId,
-        p_user_id: userId,
-        p_new_highlights: highlights,
-      });
+      await query(
+        `update projects
+         set highlights = (
+           select coalesce(jsonb_agg(h order by ord), '[]'::jsonb) from (
+             select t.h, t.ord
+             from jsonb_array_elements(coalesce(highlights, '[]'::jsonb) || $3::jsonb) with ordinality as t(h, ord)
+             order by t.ord
+             offset greatest(0, jsonb_array_length(coalesce(highlights, '[]'::jsonb) || $3::jsonb) - 200)
+           ) sub
+         ), updated_at = now()
+         where id = $1 and user_id = $2`,
+        [projectId, userId, JSON.stringify(highlights)],
+      );
     }
 
     // Send done + close only if client is still connected

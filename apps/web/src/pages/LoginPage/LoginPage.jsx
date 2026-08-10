@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { requestPasswordReset } from '@hermes/api';
 import useAuth from '../../hooks/useAuth';
 import styles from './LoginPage.module.css';
 
@@ -39,14 +39,8 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      if (err) {
-        setError(err.message);
-      } else {
-        setResetSent(true);
-      }
+      await requestPasswordReset(email, `${window.location.origin}/reset-password`);
+      setResetSent(true);
     } catch (err) {
       setError(err.message || 'Failed to send reset email');
     } finally {

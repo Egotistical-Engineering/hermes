@@ -1,114 +1,104 @@
-import { createContext, useState, useEffect } from 'react';
+import { createContext, useCallback, useEffect, useState } from 'react';
 import posthog from 'posthog-js';
-import { supabase, initOfflineAdapter } from '../lib/supabase';
-import { IS_TAURI } from '../lib/platform';
+import {
+  setAccessTokenProvider,
+  getSession as fetchSession,
+  signInWithEmail,
+  getGoogleSignInUrl,
+  signOutSession,
+  setNewPassword,
+} from '@hermes/api';
+import { initOfflineAdapter } from '../lib/api';
 
 export const AuthContext = createContext(null);
+
+const TOKEN_KEY = 'hermes-session-token';
+
+function readStoredToken() {
+  try {
+    return window.localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeToken(token) {
+  try {
+    if (token) window.localStorage.setItem(TOKEN_KEY, token);
+    else window.localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // Storage unavailable (in-app browsers) — session lives for the page only
+  }
+}
+
+let currentToken = readStoredToken();
+setAccessTokenProvider(() => currentToken);
 
 export default function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
-  useEffect(() => {
-    // Check for OAuth error in URL hash (e.g. signup rejected)
-    const hash = window.location.hash;
-    if (hash.includes('error=')) {
-      const params = new URLSearchParams(hash.replace('#', ''));
-      const desc = params.get('error_description');
-      if (desc) {
-        setAuthError(desc.includes('Signups not allowed')
-          ? 'Signups are currently disabled. Please try again later.'
-          : desc);
-        // Clean the hash so the error doesn't persist on refresh
-        window.history.replaceState(null, '', window.location.pathname);
-      }
+  const applySession = useCallback((next) => {
+    currentToken = next?.access_token ?? null;
+    storeToken(currentToken);
+    setSession(next);
+    if (next?.user) {
+      posthog.identify(next.user.id, { email: next.user.email });
+      initOfflineAdapter(next.user.id);
+    } else {
+      posthog.reset();
     }
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-      if (session?.user) {
-        posthog.identify(session.user.id, {
-          email: session.user.email,
-          auth_provider: session.user.app_metadata?.provider || 'email',
-        });
-        // Initialize offline adapter for Tauri
-        initOfflineAdapter(session.user.id);
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session?.user) {
-        posthog.identify(session.user.id, {
-          email: session.user.email,
-          auth_provider: session.user.app_metadata?.provider || 'email',
-        });
-        // Initialize offline adapter for Tauri on auth change
-        initOfflineAdapter(session.user.id);
-      } else {
-        posthog.reset();
-      }
-    });
-
-    // Listen for deep link OAuth callback in Tauri
-    if (IS_TAURI) {
-      import('@tauri-apps/plugin-deep-link').then(({ onOpenUrl }) => {
-        onOpenUrl((urls) => {
-          for (const url of urls) {
-            if (url.startsWith('hermes://auth/callback')) {
-              const hashParams = new URL(url.replace('hermes://', 'https://placeholder/')).hash;
-              if (hashParams) {
-                // Extract tokens from the deep link and set session
-                const params = new URLSearchParams(hashParams.replace('#', ''));
-                const accessToken = params.get('access_token');
-                const refreshToken = params.get('refresh_token');
-                if (accessToken && refreshToken) {
-                  supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-                }
-              }
-            }
-          }
-        });
-      }).catch(() => {
-        // Deep link plugin not available
-      });
-    }
-
-    return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = (email, password) =>
-    supabase.auth.signInWithPassword({ email, password });
+  useEffect(() => {
+    let cancelled = false;
 
-  const signInWithGoogle = async () => {
-    if (IS_TAURI) {
-      // In Tauri, open OAuth in system browser and handle callback via deep link
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          skipBrowserRedirect: true,
-          redirectTo: 'hermes://auth/callback',
-        },
-      });
-      if (error) throw error;
-      if (data?.url) {
-        const { open } = await import('@tauri-apps/plugin-shell');
-        await open(data.url);
-      }
-      return { data, error };
+    async function restore() {
+      // Try the stored bearer token first; fall back to the same-site session
+      // cookie (present right after an OAuth redirect from the server).
+      const stored = readStoredToken();
+      let restored = null;
+      if (stored) restored = await fetchSession(stored).catch(() => null);
+      if (!restored) restored = await fetchSession(null).catch(() => null);
+      if (cancelled) return;
+      applySession(restored);
+      setLoading(false);
     }
-    return supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/login` },
-    });
-  };
 
-  const signOut = () => supabase.auth.signOut();
+    restore();
+    return () => { cancelled = true; };
+  }, [applySession]);
 
-  const updatePassword = (newPassword) =>
-    supabase.auth.updateUser({ password: newPassword }).then(({ error }) => { if (error) throw error; });
+  const signIn = useCallback(async (email, password) => {
+    try {
+      const next = await signInWithEmail(email, password);
+      applySession(next);
+      return { error: null };
+    } catch (err) {
+      return { error: err };
+    }
+  }, [applySession]);
+
+  const signInWithGoogle = useCallback(async () => {
+    try {
+      const url = await getGoogleSignInUrl(`${window.location.origin}/login`);
+      window.location.assign(url);
+      return { error: null };
+    } catch (err) {
+      setAuthError(err?.message || 'Google sign-in failed');
+      return { error: err };
+    }
+  }, []);
+
+  const signOut = useCallback(async () => {
+    await signOutSession(currentToken).catch(() => {});
+    applySession(null);
+  }, [applySession]);
+
+  const updatePassword = useCallback(async (newPassword) => {
+    await setNewPassword(newPassword);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ session, loading, authError, clearAuthError: () => setAuthError(null), signIn, signInWithGoogle, signOut, updatePassword }}>

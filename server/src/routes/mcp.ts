@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { supabase } from '../lib/supabase.js';
+import { query } from '../lib/db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { mcpManager } from '../lib/mcp.js';
 import { validateMcpServerConfig, validateMcpServerUpdate, validateMcpServerDns } from '../lib/mcpValidation.js';
@@ -35,14 +35,15 @@ router.use(requireMcpAccess);
 router.get('/servers', async (req: Request, res: Response) => {
   const userId = req.user!.id;
 
-  const { data, error } = await supabase
-    .from('user_mcp_servers')
-    .select('id, name, url, headers, enabled, created_at, updated_at')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    logger.error({ error: error.message, userId }, 'Failed to list MCP servers');
+  let data: Record<string, unknown>[];
+  try {
+    const result = await query(
+      'select id, name, url, headers, enabled, created_at, updated_at from user_mcp_servers where user_id = $1 order by created_at asc',
+      [userId],
+    );
+    data = result.rows;
+  } catch (err: any) {
+    logger.error({ error: err?.message, userId }, 'Failed to list MCP servers');
     res.status(500).json({ error: 'Failed to list servers' });
     return;
   }
@@ -80,46 +81,30 @@ router.post('/servers', async (req: Request, res: Response) => {
     }
   }
 
-  // Check server count limit
-  const { count, error: countError } = await supabase
-    .from('user_mcp_servers')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId);
-
-  if (countError) {
-    logger.error({ error: countError.message, userId }, 'Failed to count MCP servers');
-    res.status(500).json({ error: 'Failed to create server' });
-    return;
-  }
-
-  if ((count ?? 0) >= MAX_SERVERS_PER_USER) {
-    res.status(400).json({ error: `Maximum of ${MAX_SERVERS_PER_USER} servers allowed` });
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from('user_mcp_servers')
-    .insert({
-      user_id: userId,
-      name,
-      url,
-      headers: headers || {},
-    })
-    .select('id, name, url, headers, enabled, created_at, updated_at')
-    .single();
-
-  if (error) {
-    if (error.code === '23505') {
+  try {
+    const { rows: countRows } = await query(
+      'select count(*)::int as n from user_mcp_servers where user_id = $1', [userId],
+    );
+    if ((countRows[0]?.n ?? 0) >= MAX_SERVERS_PER_USER) {
+      res.status(400).json({ error: `Maximum of ${MAX_SERVERS_PER_USER} servers allowed` });
+      return;
+    }
+    const { rows } = await query(
+      `insert into user_mcp_servers (user_id, name, url, headers)
+       values ($1, $2, $3, $4)
+       returning id, name, url, headers, enabled, created_at, updated_at`,
+      [userId, name, url, JSON.stringify(headers || {})],
+    );
+    await mcpManager.invalidateUserPool(userId);
+    res.status(201).json({ server: rows[0] });
+  } catch (err: any) {
+    if (err?.code === '23505') {
       res.status(409).json({ error: `A server named "${name}" already exists` });
       return;
     }
-    logger.error({ error: error.message, userId }, 'Failed to create MCP server');
+    logger.error({ error: err?.message, userId }, 'Failed to create MCP server');
     res.status(500).json({ error: 'Failed to create server' });
-    return;
   }
-
-  await mcpManager.invalidateUserPool(userId);
-  res.status(201).json({ server: data });
 });
 
 // PATCH /servers/:id — update a server
@@ -145,30 +130,34 @@ router.patch('/servers/:id', async (req: Request, res: Response) => {
     return;
   }
 
-  const { data, error } = await supabase
-    .from('user_mcp_servers')
-    .update(update)
-    .eq('id', serverId)
-    .eq('user_id', userId)
-    .select('id, name, url, headers, enabled, created_at, updated_at')
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') {
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  for (const [key, value] of Object.entries(update)) {
+    values.push(key === 'headers' ? JSON.stringify(value) : value);
+    sets.push(`${key} = $${values.length}`);
+  }
+  values.push(serverId, userId);
+  try {
+    const { rows } = await query(
+      `update user_mcp_servers set ${sets.join(', ')}, updated_at = now()
+       where id = $${values.length - 1} and user_id = $${values.length}
+       returning id, name, url, headers, enabled, created_at, updated_at`,
+      values,
+    );
+    if (!rows[0]) {
       res.status(404).json({ error: 'Server not found' });
       return;
     }
-    if (error.code === '23505') {
+    await mcpManager.invalidateUserPool(userId);
+    res.json({ server: rows[0] });
+  } catch (err: any) {
+    if (err?.code === '23505') {
       res.status(409).json({ error: `A server with that name already exists` });
       return;
     }
-    logger.error({ error: error.message, userId, serverId }, 'Failed to update MCP server');
+    logger.error({ error: err?.message, userId, serverId }, 'Failed to update MCP server');
     res.status(500).json({ error: 'Failed to update server' });
-    return;
   }
-
-  await mcpManager.invalidateUserPool(userId);
-  res.json({ server: data });
 });
 
 // DELETE /servers/:id — remove a server
@@ -176,14 +165,10 @@ router.delete('/servers/:id', async (req: Request, res: Response) => {
   const userId = req.user!.id;
   const serverId = req.params.id;
 
-  const { error } = await supabase
-    .from('user_mcp_servers')
-    .delete()
-    .eq('id', serverId)
-    .eq('user_id', userId);
-
-  if (error) {
-    logger.error({ error: error.message, userId, serverId }, 'Failed to delete MCP server');
+  try {
+    await query('delete from user_mcp_servers where id = $1 and user_id = $2', [serverId, userId]);
+  } catch (err: any) {
+    logger.error({ error: err?.message, userId, serverId }, 'Failed to delete MCP server');
     res.status(500).json({ error: 'Failed to delete server' });
     return;
   }
@@ -197,14 +182,13 @@ router.post('/servers/:id/test', async (req: Request, res: Response) => {
   const userId = req.user!.id;
   const serverId = req.params.id;
 
-  const { data: server, error } = await supabase
-    .from('user_mcp_servers')
-    .select('id, name, url, headers, enabled')
-    .eq('id', serverId)
-    .eq('user_id', userId)
-    .single();
+  const { rows: serverRows } = await query(
+    'select id, name, url, headers, enabled from user_mcp_servers where id = $1 and user_id = $2',
+    [serverId, userId],
+  ).catch(() => ({ rows: [] as Record<string, unknown>[] }));
+  const server = serverRows[0] as { id: string; name: string; url: string; headers: unknown; enabled: boolean } | undefined;
 
-  if (error || !server) {
+  if (!server) {
     res.status(404).json({ error: 'Server not found' });
     return;
   }

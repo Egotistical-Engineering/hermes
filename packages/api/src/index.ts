@@ -1,4 +1,3 @@
-export { initSupabase, getSupabase, _resetSupabase, type SupportedStorage } from './supabase';
 export { initPlatform, getPlatform } from './config';
 export { setDataSourceAdapter, getDataSource, type DataSourceAdapter } from './dataSource';
 export { createWebSessionStorageAdapter, type StorageAdapter } from './storage';
@@ -26,7 +25,21 @@ export {
   updatePublishSettings,
 } from './writing';
 
-export { signup } from './auth';
+export {
+  signup,
+  signUpWithEmail,
+  signInWithEmail,
+  getGoogleSignInUrl,
+  getSession,
+  signOutSession,
+  changePassword,
+  setNewPassword,
+  requestPasswordReset,
+  resetPassword,
+  type AuthSession,
+  type AuthUser,
+} from './auth';
+export { setAccessTokenProvider, getAccessToken, apiFetch, ApiError } from './http';
 
 export { fetchMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, testMcpServer } from './mcpServers';
 export type { McpServer } from './mcpServers';

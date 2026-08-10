@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { supabase } from '../../lib/supabase';
+import { resetPassword } from '@hermes/api';
 import useAuth from '../../hooks/useAuth';
 import styles from './ResetPasswordPage.module.css';
 
@@ -25,13 +25,16 @@ export default function ResetPasswordPage() {
 
     setLoading(true);
 
-    const { error: err } = await supabase.auth.updateUser({ password });
-
-    setLoading(false);
-    if (err) {
-      setError(err.message);
+    try {
+      const token = new URLSearchParams(window.location.search).get('token');
+      if (!token) throw new Error('Invalid or expired reset link.');
+      await resetPassword(password, token);
+    } catch (err) {
+      setLoading(false);
+      setError(err?.message || 'Failed to reset password.');
       return;
     }
+    setLoading(false);
 
     await signOut();
     toast.success('Password updated');
