@@ -45,8 +45,17 @@ app.use((req, res, next) => {
   next();
 });
 
+// Web origin plus the Tauri native shell's webview origins (macOS/iOS use
+// tauri://localhost, Windows uses http://tauri.localhost). Native auth rides
+// bearer tokens, so widening CORS here exposes no ambient credentials.
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:5176',
+  'tauri://localhost',
+  'http://tauri.localhost',
+  'http://localhost:5176',
+];
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5176',
+  origin: allowedOrigins,
   credentials: true,
 }));
 

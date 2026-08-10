@@ -21,7 +21,12 @@ export const auth = betterAuth({
   database: pool,
   basePath: '/api/auth',
   baseURL: process.env.SERVER_PUBLIC_URL || `http://localhost:${process.env.PORT || 3003}`,
-  trustedOrigins: [process.env.FRONTEND_URL || 'http://localhost:5176'],
+  trustedOrigins: [
+    process.env.FRONTEND_URL || 'http://localhost:5176',
+    'tauri://localhost',
+    'http://tauri.localhost',
+    'http://localhost:5176',
+  ],
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,
