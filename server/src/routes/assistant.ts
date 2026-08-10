@@ -3,10 +3,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod/v4';
 import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
-import { checkMessageLimit } from '../middleware/usageGate.js';
 import logger from '../lib/logger.js';
 import { mcpManager } from '../lib/mcp.js';
-import { isAdminUser } from '../lib/config.js';
 import type { UserMcpServerConfig } from '../lib/mcp.js';
 
 const router = Router();
@@ -185,7 +183,7 @@ async function getOwnedProject(projectId: string, userId: string) {
   return data;
 }
 
-router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: Response) => {
+router.post('/chat', requireAuth, async (req: Request, res: Response) => {
   const parsed = ChatSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({
@@ -222,10 +220,8 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
   const existingMessages: AssistantMessage[] = ((convo?.messages as AssistantMessage[]) || []).slice(-30);
   const priorEssays = await loadPriorEssayRewrites((brainDump?.prior_essays || []) as string[]);
 
-  // Determine MCP access
-  const isPro = req.usageInfo?.plan === 'pro';
-  const isAdmin = isAdminUser(userId);
-  const hasMcpAccess = isPro || isAdmin;
+  // MCP tools are available to all authenticated users (open-source, no paid tiers)
+  const hasMcpAccess = true;
 
   const tools: Anthropic.Messages.Tool[] = [HIGHLIGHT_TOOL, CITE_SOURCE_TOOL];
   if (hasMcpAccess) {
@@ -523,9 +519,6 @@ router.post('/chat', requireAuth, checkMessageLimit, async (req: Request, res: R
         p_new_highlights: highlights,
       });
     }
-
-    // Record successful message usage
-    await supabase.from('message_usage').insert({ user_id: userId, project_id: projectId });
 
     // Send done + close only if client is still connected
     if (!clientDisconnected) {

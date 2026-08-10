@@ -28,9 +28,6 @@ export {
 
 export { signup } from './auth';
 
-export { fetchCurrentUsage, getProUpgradeUrl, createPortalSession } from './billing';
-export type { UsageInfo } from './billing';
-
 export { fetchMcpServers, createMcpServer, updateMcpServer, deleteMcpServer, testMcpServer } from './mcpServers';
 export type { McpServer } from './mcpServers';
 

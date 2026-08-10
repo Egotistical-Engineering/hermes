@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 import { mcpManager } from '../lib/mcp.js';
 import { validateMcpServerConfig, validateMcpServerUpdate, validateMcpServerDns } from '../lib/mcpValidation.js';
-import { ADMIN_USER_IDS } from '../lib/config.js';
 import logger from '../lib/logger.js';
 
 import type { UserMcpServerConfig } from '../lib/mcp.js';
@@ -12,19 +11,9 @@ const router = Router();
 
 const MAX_SERVERS_PER_USER = 10;
 
-async function hasMcpAccess(userId: string): Promise<boolean> {
-  if (ADMIN_USER_IDS.has(userId)) return true;
-
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('plan, subscription_status')
-    .eq('id', userId)
-    .single();
-
-  if (!profile) return false;
-
-  return profile.plan === 'pro' &&
-    ['active', 'trialing', 'past_due'].includes(profile.subscription_status);
+async function hasMcpAccess(_userId: string): Promise<boolean> {
+  // MCP configuration is available to all authenticated users (open-source, no paid tiers)
+  return true;
 }
 
 // All routes require auth
@@ -34,7 +23,7 @@ router.use(requireAuth);
 async function requireMcpAccess(req: Request, res: Response, next: NextFunction) {
   const userId = req.user!.id;
   if (!(await hasMcpAccess(userId))) {
-    res.status(403).json({ error: 'MCP server configuration requires a Pro subscription' });
+    res.status(403).json({ error: 'MCP server configuration requires authentication' });
     return;
   }
   next();

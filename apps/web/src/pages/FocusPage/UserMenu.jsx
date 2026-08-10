@@ -1,20 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import posthog from 'posthog-js';
-import { createPortalSession } from '@hermes/api';
 import useAuth from '../../hooks/useAuth';
-import useUsage from '../../hooks/useUsage';
 import McpSettingsView from './McpSettingsView';
 import styles from './UserMenu.module.css';
 
 export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
   const { session, signOut, updatePassword } = useAuth();
-  const { usage } = useUsage(session);
   const wrapperRef = useRef(null);
   const passwordInputRef = useRef(null);
 
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState('menu'); // 'menu' | 'password' | 'billing' | 'mcp'
+  const [view, setView] = useState('menu'); // 'menu' | 'password' | 'mcp'
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -114,16 +109,6 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
     await signOut();
   };
 
-  const handleManageSubscription = async () => {
-    if (!session?.access_token) return;
-    try {
-      const { url } = await createPortalSession(session.access_token);
-      window.open(url, '_blank');
-    } catch {
-      // Silently fail
-    }
-  };
-
   const initial = email ? email[0].toUpperCase() : null;
 
   const personIcon = (
@@ -190,80 +175,6 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
               </form>
             ) : view === 'mcp' ? (
               <McpSettingsView session={session} onBack={() => setView('menu')} />
-            ) : view === 'billing' ? (
-              <div className={styles.billingView}>
-                <div className={styles.billingTitle}>Billing</div>
-                <div className={styles.billingPlan}>
-                  {usage?.plan === 'pro' ? 'Patron' : usage?.isTrial ? 'Trial' : 'Free trial'} plan
-                  {usage?.isTrial && usage?.trialExpiresAt && (
-                    <span className={styles.billingCancelNote}>
-                      {' '}({Math.max(0, Math.ceil((new Date(usage.trialExpiresAt) - Date.now()) / (1000 * 60 * 60 * 24)))} days remaining)
-                    </span>
-                  )}
-                  {usage?.plan !== 'pro' && !usage?.isTrial && usage?.freeExpiresAt && !usage?.freeExpired && (
-                    <span className={styles.billingCancelNote}>
-                      {' '}({Math.max(0, Math.ceil((new Date(usage.freeExpiresAt) - Date.now()) / (1000 * 60 * 60 * 24)))} days remaining)
-                    </span>
-                  )}
-                  {usage?.cancelAtPeriodEnd && usage?.currentPeriodEnd && (
-                    <span className={styles.billingCancelNote}>
-                      {' '}(cancels {new Date(usage.currentPeriodEnd).toLocaleDateString()})
-                    </span>
-                  )}
-                </div>
-                {usage && (
-                  <div className={styles.billingUsage}>
-                    {usage.used} / {usage.limit} messages used
-                  </div>
-                )}
-                {usage?.plan === 'pro' ? (
-                  <>
-                    <div className={styles.billingThankYou}>
-                      Thank you for supporting Hermes. Your patronage funds the contributors who build this tool.
-                    </div>
-                    <button
-                      className={styles.billingActionBtn}
-                      onClick={handleManageSubscription}
-                    >
-                      Manage subscription
-                    </button>
-                  </>
-                ) : usage?.isTrial ? (
-                  <>
-                    <div className={styles.billingThankYou}>
-                      After your trial ends, you'll need to become a Patron to continue.
-                    </div>
-                    <Link
-                      className={styles.billingActionBtn}
-                      to="/upgrade"
-                      onClick={() => { posthog.capture('upgrade_clicked', { source: 'billing_menu' }); closeDropdown(); }}
-                    >
-                      Become a Patron — $15/mo
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    <ul className={styles.billingFeatures}>
-                      <li>300 messages/month</li>
-                      <li>Early access to beta features</li>
-                      <li>Support independent development</li>
-                    </ul>
-                    <Link
-                      className={styles.billingActionBtn}
-                      to="/upgrade"
-                      onClick={() => { posthog.capture('upgrade_clicked', { source: 'billing_menu' }); closeDropdown(); }}
-                    >
-                      Become a Patron — $15/mo
-                    </Link>
-                  </>
-                )}
-                <button
-                  className={styles.billingBackBtn}
-                  onClick={() => setView('menu')}
-                >
-                  Back
-                </button>
-              </div>
             ) : (
               <>
                 <div className={styles.emailSection}>
@@ -279,18 +190,10 @@ export default function UserMenu({ onDropdownOpen, onDropdownClose }) {
                   </button>
                   <button
                     className={styles.menuItem}
-                    onClick={() => setView('billing')}
+                    onClick={() => setView('mcp')}
                   >
-                    Billing
+                    MCP Servers <span className={styles.betaBadge}>beta</span>
                   </button>
-                  {usage?.hasMcpAccess && (
-                    <button
-                      className={styles.menuItem}
-                      onClick={() => setView('mcp')}
-                    >
-                      MCP Servers <span className={styles.betaBadge}>beta</span>
-                    </button>
-                  )}
                   <button
                     className={`${styles.menuItem} ${styles.menuItemDanger}`}
                     onClick={handleSignOut}

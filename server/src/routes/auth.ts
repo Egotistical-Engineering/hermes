@@ -2,7 +2,6 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod/v4';
 import { supabase } from '../lib/supabase.js';
 import logger from '../lib/logger.js';
-import { FREE_TIER_DAYS } from '../lib/limits.js';
 
 const router = Router();
 
@@ -27,7 +26,7 @@ router.post('/signup', async (req: Request, res: Response) => {
   const { email, password } = parsed.data;
 
   // Create user (auto-confirmed)
-  const { data: createData, error: createError } = await supabase.auth.admin.createUser({
+  const { error: createError } = await supabase.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
@@ -41,19 +40,6 @@ router.post('/signup', async (req: Request, res: Response) => {
     logger.warn({ email, error: createError.message }, 'User creation failed');
     res.status(400).json({ error: message });
     return;
-  }
-
-  // Stamp trial_expires_at on every new user
-  if (createData.user) {
-    const expiresAt = new Date(Date.now() + FREE_TIER_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    const { error: updateError } = await supabase
-      .from('user_profiles')
-      .update({ trial_expires_at: expiresAt })
-      .eq('id', createData.user.id);
-
-    if (updateError) {
-      logger.error({ userId: createData.user.id, error: updateError.message }, 'Failed to set trial_expires_at');
-    }
   }
 
   logger.info({ email }, 'User created');
