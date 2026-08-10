@@ -20,9 +20,13 @@ export function initWebApi() {
  * NOTE: the offline package still syncs against Supabase and needs its own
  * migration pass — until then, native builds run online-only.
  */
-export async function initOfflineAdapter(userId) {
-  if (!IS_TAURI) return;
+// @hermes/offline still syncs against Supabase, which no longer exists.
+// Native runs online-only (same fetch paths as web) until the offline
+// package is ported to sync against the REST API — flip this when it is.
+const OFFLINE_SYNC_ENABLED = false;
 
+export async function initOfflineAdapter(userId) {
+  if (!IS_TAURI || !OFFLINE_SYNC_ENABLED) return;
   try {
     const { createHybridAdapter, initConnectivity, fullSync } = await import('@hermes/offline');
     initConnectivity(import.meta.env.VITE_CHAT_API_URL, true);
