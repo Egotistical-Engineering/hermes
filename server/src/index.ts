@@ -29,6 +29,12 @@ for (const key of requiredEnv) {
     process.exit(1);
   }
 }
+// LLM_PROVIDER=openai needs its API key at boot — otherwise the server starts
+// fine and every chat fails at runtime.
+if ((process.env.LLM_PROVIDER || '').trim().toLowerCase() === 'openai' && !process.env.OPENAI_API_KEY) {
+  logger.error({ key: 'OPENAI_API_KEY' }, 'Missing required environment variable (LLM_PROVIDER=openai)');
+  process.exit(1);
+}
 
 const app = express();
 app.set('trust proxy', 1); // Railway runs behind a reverse proxy
