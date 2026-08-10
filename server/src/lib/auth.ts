@@ -52,6 +52,10 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24, // refresh expiry at most daily
   },
   advanced: {
+    ipAddress: {
+      // Railway terminates TLS and forwards the client address here
+      ipAddressHeaders: ['x-forwarded-for'],
+    },
     defaultCookieAttributes: {
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
