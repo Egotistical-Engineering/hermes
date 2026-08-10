@@ -11,7 +11,6 @@ const AuthConfirmPage = lazy(() => import('./pages/AuthConfirmPage/AuthConfirmPa
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage/ResetPasswordPage'));
 const SignupPage = lazy(() => import('./pages/SignupPage/SignupPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage/LoginPage'));
-const UpgradePage = lazy(() => import('./pages/UpgradePage/UpgradePage'));
 
 function NotFound() {
   return (
@@ -143,7 +142,6 @@ export default function App() {
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<Navigate to="/" replace />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/upgrade" element={<UpgradePage />} />
           <Route path="/auth/confirm" element={<AuthConfirmPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

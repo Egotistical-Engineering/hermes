@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom';
 import posthog from 'posthog-js';
 import { fetchAssistantConversation, startAssistantStream } from '@hermes/api';
-import useUsage from '../../hooks/useUsage';
 import SourcesPill from './SourcesPill';
 import styles from './FocusChatWindow.module.css';
 
@@ -63,7 +62,6 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const abortRef = useRef(null);
-  const { usage, refresh: refreshUsage } = useUsage(session);
 
   // Load conversation history on mount / project change
   useEffect(() => {
@@ -191,7 +189,6 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
             });
           }
           setToolStatus(null);
-          refreshUsage(true);
         },
         onError() {
           if (rafId !== null) cancelAnimationFrame(rafId);
@@ -204,14 +201,8 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
       if (err?.name === 'AbortError') return;
 
       if (err?.status === 429) {
-        // Rate limited — show inline upgrade message
-        const limitMsg = err.plan === 'pro'
-          ? `You've reached your monthly limit of ${err.limit} messages. Your limit resets soon — thank you for supporting Hermes.`
-          : err.code === 'FREE_EXPIRED'
-            ? `Your 7-day free trial has ended.\n\nBecome a Patron ($15/mo) to continue using Hermes. [Learn more](/upgrade)`
-            : err.isTrial
-              ? `You've used all ${err.limit} trial messages for this month.\n\nBecome a Patron ($15/mo) to get 300 messages per month. [Learn more](/upgrade)`
-              : `You've used all ${err.limit} free messages for today. Your free trial includes 10 messages/day for 7 days.\n\nBecome a Patron ($15/mo) to get 300 messages per month and support Hermes development. [Learn more](/upgrade)`;
+        // Rate limited by the server
+        const limitMsg = `You're sending messages faster than the server allows. Give it a minute and try again.`;
 
         setMessages((prev) => {
           const updated = [...prev];
@@ -224,7 +215,6 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
           }
           return updated;
         });
-        refreshUsage(true);
       } else {
         // Remove the empty assistant message on error
         setMessages((prev) => {
@@ -239,7 +229,7 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
       setStreaming(false);
       setToolStatus(null);
     }
-  }, [input, streaming, session, projectId, getPages, activeTab, onHighlights, refreshUsage]);
+  }, [input, streaming, session, projectId, getPages, activeTab, onHighlights]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -348,11 +338,6 @@ export default function FocusChatWindow({ projectId, getPages, activeTab, onHigh
           {isOffline && (
             <div className={styles.usageCounter}>
               Offline — past messages visible
-            </div>
-          )}
-          {!isOffline && usage && (
-            <div className={styles.usageCounter}>
-              {usage.remaining} messages remaining
             </div>
           )}
           <input

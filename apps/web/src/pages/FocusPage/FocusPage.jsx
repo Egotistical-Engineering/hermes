@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Sentry from '@sentry/react';
 import posthog from 'posthog-js';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import { Markdown } from '@tiptap/markdown';
 import { Slice } from '@tiptap/pm/model';
-import { fetchWritingProject, saveProjectPages, saveProjectHighlights, updateWritingProject, updatePublishSettings, generateSlug, fetchCurrentUsage } from '@hermes/api';
+import { fetchWritingProject, saveProjectPages, saveProjectHighlights, updateWritingProject, updatePublishSettings, generateSlug } from '@hermes/api';
 import { IS_MOBILE } from '../../lib/platform';
 import useAuth from '../../hooks/useAuth';
 import useFocusMode from './useFocusMode';
@@ -36,7 +36,6 @@ function getWordCount(text) {
 
 export default function FocusPage() {
   const { projectId } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
   const { session } = useAuth();
   const [projectTitle, setProjectTitle] = useState('');
   const [projectSubtitle, setProjectSubtitle] = useState('');
@@ -424,32 +423,6 @@ export default function FocusPage() {
   const handlePublishChange = useCallback((updates) => {
     setPublishState((prev) => ({ ...prev, ...updates }));
   }, []);
-
-  // Poll for upgrade confirmation when returning from Stripe
-  useEffect(() => {
-    if (searchParams.get('upgraded') !== 'true' || !session?.access_token) return;
-
-    let attempts = 0;
-    const maxAttempts = 15;
-    const interval = setInterval(async () => {
-      attempts++;
-      try {
-        const usage = await fetchCurrentUsage(session.access_token);
-        if (usage.plan === 'pro') {
-          clearInterval(interval);
-          setSearchParams((prev) => { prev.delete('upgraded'); return prev; }, { replace: true });
-        }
-      } catch {
-        // Ignore errors during polling
-      }
-      if (attempts >= maxAttempts) {
-        clearInterval(interval);
-        setSearchParams((prev) => { prev.delete('upgraded'); return prev; }, { replace: true });
-      }
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [searchParams, session?.access_token, setSearchParams]);
 
   // Inline title editing
   const startEditingTitle = useCallback(() => {

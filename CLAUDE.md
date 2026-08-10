@@ -81,13 +81,7 @@ server/src/
 
 **Auth** (`server/src/routes/auth.ts`):
 
-- `POST /api/auth/signup` — create user account (email/password, auto-confirmed); stamps `trial_expires_at` (defaults to `FREE_TIER_DAYS`)
-
-**Billing** (`server/src/routes/stripe.ts` + `server/src/routes/usage.ts`):
-
-- `POST /api/stripe/webhook` — Stripe webhook handler (signature-verified, idempotent)
-- `POST /api/stripe/portal` — create Stripe Customer Portal session (auth required)
-- `GET /api/usage/current` — current user's message usage and plan info (auth required)
+- `POST /api/auth/signup` — create user account (email/password, auto-confirmed)
 
 ### Database tables
 
@@ -95,9 +89,7 @@ All tables linked by `project_id`, owner-scoped via RLS:
 
 - `projects` — `id`, `user_id`, `title`, `status`, `content`, `highlights` (JSONB), timestamps
 - `assistant_conversations` — `project_id` (unique), `messages` (JSONB), timestamps
-- `user_profiles` — `id` (PK → auth.users), `plan`, `stripe_customer_id`, `stripe_subscription_id`, `subscription_status`, `billing_cycle_anchor`, `cancel_at_period_end`, `current_period_end`, `trial_expires_at`, timestamps
-- `message_usage` — `id`, `user_id`, `project_id`, `created_at` (tracks per-message usage for limits)
-- `processed_stripe_events` — `event_id` (PK), `event_type`, `processed_at` (webhook idempotency)
+- `user_profiles`, `message_usage`, `processed_stripe_events`, `invite_codes` — **legacy** billing/invite tables from the retired paid tier; no longer read or written by the application
 
 ## Staging Environment
 
@@ -164,25 +156,11 @@ Email/password or Google OAuth via Supabase Auth. No invite codes required — o
 ### Signup flow
 
 - **Email/password**: User fills email + password → `POST /api/auth/signup` creates account (auto-confirmed via `admin.createUser()`) → auto-login
-- **Google OAuth**: Standard Supabase OAuth flow → usage gate auto-creates profile with `trial_expires_at` on first request
+- **Google OAuth**: Standard Supabase OAuth flow
 
-### Free tier and limits
+### Usage limits
 
-Two tiers: **Pro** (300/month) and **Free** (7 days, 10 messages/day). There is no separate trial tier.
-
-**How it works:**
-- On email/password signup, the server stamps `trial_expires_at` on `user_profiles` (defaults to `FREE_TIER_DAYS = 7`)
-- Google OAuth users get `trial_expires_at` stamped by the usage gate on first request (falls back to `created_at + FREE_TIER_DAYS`)
-- Free users get `FREE_DAILY_LIMIT` (10/day). After `trial_expires_at`, they're locked out (`FREE_EXPIRED`)
-- No cron job — expiry is checked lazily on every request
-- Limits are defined in `server/src/lib/limits.ts`
-
-**Edge cases:**
-- Pro subscription takes priority over free tier (`isPro` checked first)
-- Expired free tier: `trial_expires_at` stays as audit trail, user sees upgrade prompt
-- Free users do NOT get MCP access (`hasMcpAccess = isPro || isAdmin`)
-
-**Legacy:** The `invite_codes` table and related DB functions still exist but are no longer used by the application.
+There are none. Hermes is free and open — no paid tier, no message caps, no trials. The only throttle is the per-user/IP rate limiter on the assistant endpoint (abuse protection, not billing). MCP access is available to all authenticated users. Anyone self-hosting pays their own Anthropic API costs per token.
 
 ### Server env vars
 
@@ -191,8 +169,6 @@ ANTHROPIC_API_KEY=...
 SUPABASE_URL=...
 SUPABASE_SERVICE_KEY=...
 SUPABASE_ANON_KEY=...
-STRIPE_SECRET_KEY=...         # Stripe secret key for billing
-STRIPE_WEBHOOK_SECRET=...     # Stripe webhook signing secret
 SENTRY_DSN=...                # Error tracking (optional)
 LOG_LEVEL=info                # debug, info, warn, error
 ```

@@ -7,8 +7,6 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import assistantRouter from './routes/assistant.js';
 import authRouter from './routes/auth.js';
-import stripeRouter from './routes/stripe.js';
-import usageRouter from './routes/usage.js';
 import mcpRouter from './routes/mcp.js';
 import logger from './lib/logger.js';
 import { mcpManager } from './lib/mcp.js';
@@ -27,13 +25,6 @@ for (const key of requiredEnv) {
   if (!process.env[key]) {
     logger.error({ key }, 'Missing required environment variable');
     process.exit(1);
-  }
-}
-
-// Warn about optional but important env vars
-for (const key of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET']) {
-  if (!process.env[key]) {
-    logger.warn({ key }, 'Optional environment variable not set — related functionality will be disabled');
   }
 }
 
@@ -56,9 +47,6 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5176',
   credentials: true,
 }));
-
-// Stripe webhook needs raw body — mount before express.json()
-app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
 
 app.use(express.json({ limit: '1mb' }));
 
@@ -93,8 +81,6 @@ const assistantLimiter = rateLimit({
 
 app.use('/api/auth', rateLimit({ windowMs: 60_000, max: 10, standardHeaders: true, legacyHeaders: false }), authRouter);
 app.use('/api/assistant', assistantLimiter, assistantRouter);
-app.use('/api/stripe', stripeRouter);
-app.use('/api/usage', rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false }), usageRouter);
 app.use('/api/mcp', rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false }), mcpRouter);
 
 // Sentry error handler (must be after all routes)
