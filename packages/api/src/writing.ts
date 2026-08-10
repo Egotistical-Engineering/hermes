@@ -1,6 +1,6 @@
-import { getSupabase } from './supabase';
 import { getPlatform } from './config';
 import { getDataSource } from './dataSource';
+import { apiFetch, apiFetchOrNull, getAccessToken } from './http';
 import { ESSAY_TITLE, ESSAY_SUBTITLE, ESSAY_PAGES } from './essay-seed';
 import { WELCOME_TITLE, WELCOME_PAGES } from './welcome-seed';
 
@@ -179,17 +179,8 @@ export async function fetchWritingProjects(): Promise<WritingProject[]> {
     return projectListCache.data;
   }
 
-  const { data: { user } } = await getSupabase().auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-
-  const { data, error } = await getSupabase()
-    .from('projects')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('updated_at', { ascending: false });
-
-  if (error) throw error;
-  const projects = (data || []).map((row) => toWritingProject(row as WritingProjectRow));
+  const rows = await apiFetch<WritingProjectRow[]>('/api/projects');
+  const projects = (rows || []).map(toWritingProject);
   projectListCache = { data: projects, timestamp: Date.now() };
   return projects;
 }
@@ -201,22 +192,8 @@ export async function fetchWritingProject(projectId: string): Promise<WritingPro
   const cached = getCached(projectCache, projectId);
   if (cached !== undefined) return cached;
 
-  const { data: { user } } = await getSupabase().auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-
-  const { data, error } = await getSupabase()
-    .from('projects')
-    .select('*')
-    .eq('id', projectId)
-    .eq('user_id', user.id)
-    .single<WritingProjectRow>();
-
-  if (error) {
-    if ((error as { code?: string }).code === 'PGRST116') return null;
-    throw error;
-  }
-
-  const project = toWritingProject(data);
+  const row = await apiFetchOrNull<WritingProjectRow>(`/api/projects/${encodeURIComponent(projectId)}`);
+  const project = row ? toWritingProject(row) : null;
   setCache(projectCache, projectId, project);
   return project;
 }
@@ -229,21 +206,16 @@ export async function createWritingProject(
   const ds = getDataSource();
   if (ds) return ds.createProject(title, userId);
 
-  const { data, error } = await getSupabase()
-    .from('projects')
-    .insert({
+  const row = await apiFetch<WritingProjectRow>('/api/projects', {
+    method: 'POST',
+    body: JSON.stringify({
       title,
-      user_id: userId,
-      status: 'interview',
       ...(options?.subtitle && { subtitle: options.subtitle }),
       ...(options?.pages && { pages: options.pages }),
-    })
-    .select('*')
-    .single<WritingProjectRow>();
-
-  if (error) throw error;
+    }),
+  });
   projectListCache = null;
-  return toWritingProject(data);
+  return toWritingProject(row);
 }
 
 export async function updateWritingProject(
@@ -253,29 +225,19 @@ export async function updateWritingProject(
   const ds = getDataSource();
   if (ds) return ds.updateProject(projectId, updates);
 
-  const { data, error } = await getSupabase()
-    .from('projects')
-    .update(updates)
-    .eq('id', projectId)
-    .select('*')
-    .maybeSingle<WritingProjectRow>();
-
-  if (error) throw error;
-  if (!data) throw new Error('Project not found');
+  const row = await apiFetch<WritingProjectRow>(`/api/projects/${encodeURIComponent(projectId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
   invalidateProject(projectId);
-  return toWritingProject(data);
+  return toWritingProject(row);
 }
 
 export async function deleteWritingProject(projectId: string): Promise<void> {
   const ds = getDataSource();
   if (ds) return ds.deleteProject(projectId);
 
-  const { error } = await getSupabase()
-    .from('projects')
-    .delete()
-    .eq('id', projectId);
-
-  if (error) throw error;
+  await apiFetch(`/api/projects/${encodeURIComponent(projectId)}`, { method: 'DELETE' });
   invalidateProject(projectId);
   invalidateConversation(projectId);
 }
@@ -322,71 +284,52 @@ export async function cleanupDefaultProjectDuplicates(): Promise<number> {
   return idsToDelete.length;
 }
 
-async function findProjectByTitle(userId: string, title: string): Promise<WritingProject | null> {
-  const { data, error } = await getSupabase()
-    .from('projects')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('title', title)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle<WritingProjectRow>();
-
-  if (error) throw error;
-  return data ? toWritingProject(data) : null;
+async function findProjectByTitle(title: string): Promise<WritingProject | null> {
+  const projects = await fetchWritingProjects();
+  const matches = projects
+    .filter((p) => p.title === title)
+    .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  return matches[0] ?? null;
 }
 
 export async function seedEssayProject(userId: string): Promise<WritingProject> {
-  const existing = await findProjectByTitle(userId, ESSAY_TITLE);
+  const existing = await findProjectByTitle(ESSAY_TITLE);
   if (existing) return existing;
 
-  const { data: project, error: projErr } = await getSupabase()
-    .from('projects')
-    .insert({ title: ESSAY_TITLE, subtitle: ESSAY_SUBTITLE, user_id: userId, status: 'complete', pages: ESSAY_PAGES })
-    .select('*')
-    .single<WritingProjectRow>();
-
-  if (projErr) throw projErr;
-
+  const project = await createWritingProject(ESSAY_TITLE, userId, {
+    subtitle: ESSAY_SUBTITLE,
+    pages: ESSAY_PAGES,
+  });
+  await updateWritingProject(project.id, { status: 'complete' });
   projectListCache = null;
-  return toWritingProject(project);
+  return project;
 }
 
 export async function seedWelcomeProject(
   userId: string,
   customPages?: Record<string, string>,
 ): Promise<WritingProject> {
-  const existing = await findProjectByTitle(userId, WELCOME_TITLE);
+  const existing = await findProjectByTitle(WELCOME_TITLE);
   if (existing) return existing;
 
-  const { data, error } = await getSupabase()
-    .from('projects')
-    .insert({
-      title: WELCOME_TITLE,
-      user_id: userId,
-      status: 'complete',
-      pages: customPages || WELCOME_PAGES,
-    })
-    .select('*')
-    .single<WritingProjectRow>();
-
-  if (error) throw error;
+  const project = await createWritingProject(WELCOME_TITLE, userId, {
+    pages: customPages || WELCOME_PAGES,
+  });
+  await updateWritingProject(project.id, { status: 'complete' });
   projectListCache = null;
-  return toWritingProject(data);
+  return project;
 }
 
-// --- Assistant API ---
+// --- Editor persistence ---
 
 export async function saveProjectPages(projectId: string, pages: Record<string, string>): Promise<void> {
   const ds = getDataSource();
   if (ds) return ds.savePages(projectId, pages);
 
-  const { error } = await getSupabase()
-    .from('projects')
-    .update({ pages })
-    .eq('id', projectId);
-
-  if (error) throw error;
+  await apiFetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ pages }),
+  });
   invalidateProject(projectId);
 }
 
@@ -394,12 +337,10 @@ export async function saveProjectContent(projectId: string, content: string): Pr
   const ds = getDataSource();
   if (ds) return ds.saveContent(projectId, content);
 
-  const { error } = await getSupabase()
-    .from('projects')
-    .update({ content })
-    .eq('id', projectId);
-
-  if (error) throw error;
+  await apiFetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ content }),
+  });
   invalidateProject(projectId);
 }
 
@@ -407,12 +348,10 @@ export async function saveProjectHighlights(projectId: string, highlights: Highl
   const ds = getDataSource();
   if (ds) return ds.saveHighlights(projectId, highlights);
 
-  const { error } = await getSupabase()
-    .from('projects')
-    .update({ highlights })
-    .eq('id', projectId);
-
-  if (error) throw error;
+  await apiFetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ highlights }),
+  });
   invalidateProject(projectId);
 }
 
@@ -423,14 +362,9 @@ export async function fetchAssistantConversation(projectId: string): Promise<Ass
   const cached = getCached(conversationCache, projectId);
   if (cached !== undefined) return cached;
 
-  const { data, error } = await getSupabase()
-    .from('assistant_conversations')
-    .select('messages')
-    .eq('project_id', projectId)
-    .maybeSingle<{ messages: AssistantMessage[] }>();
-
-  if (error) throw error;
-
+  const data = await apiFetchOrNull<{ messages: AssistantMessage[] }>(
+    `/api/projects/${encodeURIComponent(projectId)}/conversation`,
+  );
   const messages = data?.messages || [];
   setCache(conversationCache, projectId, messages);
   return messages;
@@ -440,18 +374,10 @@ export async function saveAssistantConversation(projectId: string, messages: Ass
   const ds = getDataSource();
   if (ds) return ds.saveConversation(projectId, messages);
 
-  const { error } = await getSupabase()
-    .from('assistant_conversations')
-    .upsert(
-      {
-        project_id: projectId,
-        messages,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'project_id' },
-    );
-
-  if (error) throw error;
+  await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/conversation`, {
+    method: 'PUT',
+    body: JSON.stringify({ messages }),
+  });
   invalidateConversation(projectId);
 }
 
@@ -466,7 +392,8 @@ export async function startAssistantStream(
   const baseUrl = normalizeBaseUrl(getPlatform().serverBaseUrl);
   const res = await fetch(`${baseUrl}/api/assistant/chat`, {
     method: 'POST',
-    headers: authHeaders(accessToken),
+    headers: authHeaders(accessToken || getAccessToken() || undefined),
+    credentials: 'include',
     body: JSON.stringify({ projectId, message, pages, activeTab }),
     signal,
   });
@@ -477,10 +404,6 @@ export async function startAssistantStream(
     try {
       const body = await res.json();
       err.code = body.code;
-      err.plan = body.plan;
-      err.used = body.used;
-      err.limit = body.limit;
-      err.isTrial = body.isTrial;
       err.serverMessage = body.message;
     } catch {
       // Response wasn't JSON
@@ -518,73 +441,44 @@ export async function publishProject(
   authorName: string,
   publishedTabs: string[],
 ): Promise<WritingProject> {
-  // Fetch current project to check if already published (reuse shortId)
-  // and to snapshot current pages content
-  const existing = await fetchWritingProject(projectId);
-  const shortId = existing?.shortId || generateShortId();
-  const slug = generateSlug(existing?.title || 'untitled');
-
-  // Snapshot only the selected tabs' content into published_pages
-  const currentPages = existing?.pages || {};
-  const publishedPages: Record<string, string> = {};
-  for (const tab of publishedTabs) {
-    if (currentPages[tab]) {
-      publishedPages[tab] = currentPages[tab];
-    }
-  }
-
-  const { data, error } = await getSupabase()
-    .from('projects')
-    .update({
-      published: true,
-      short_id: shortId,
-      slug,
-      author_name: authorName,
-      published_tabs: publishedTabs,
-      published_pages: publishedPages,
-      published_at: new Date().toISOString(),
-    })
-    .eq('id', projectId)
-    .select('*')
-    .single<WritingProjectRow>();
-
-  if (error) throw error;
+  const row = await apiFetch<WritingProjectRow>(`/api/projects/${encodeURIComponent(projectId)}/publish`, {
+    method: 'POST',
+    body: JSON.stringify({ authorName, publishedTabs }),
+  });
   invalidateProject(projectId);
-  return toWritingProject(data);
+  return toWritingProject(row);
 }
 
 export async function unpublishProject(projectId: string): Promise<WritingProject> {
-  const { data, error } = await getSupabase()
-    .from('projects')
-    .update({ published: false })
-    .eq('id', projectId)
-    .select('*')
-    .single<WritingProjectRow>();
-
-  if (error) throw error;
+  const row = await apiFetch<WritingProjectRow>(`/api/projects/${encodeURIComponent(projectId)}/unpublish`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
   invalidateProject(projectId);
-  return toWritingProject(data);
+  return toWritingProject(row);
+}
+
+interface PublishedEssayRow {
+  title: string;
+  subtitle: string | null;
+  author_name: string;
+  published_pages: Record<string, string> | null;
+  published_tabs: string[] | null;
+  published_at: string;
+  short_id: string;
+  slug: string;
 }
 
 export async function fetchPublishedEssay(shortId: string): Promise<PublishedEssay | null> {
-  const { data, error } = await getSupabase()
-    .from('projects')
-    .select('title, subtitle, author_name, published_pages, published_tabs, published_at, short_id, slug')
-    .eq('short_id', shortId)
-    .eq('published', true)
-    .single();
-
-  if (error) {
-    if ((error as { code?: string }).code === 'PGRST116') return null;
-    throw error;
-  }
+  const data = await apiFetchOrNull<PublishedEssayRow>(`/api/read/${encodeURIComponent(shortId)}`);
+  if (!data) return null;
 
   // Read from the frozen snapshot (published_pages)
   const publishedTabSet = new Set(data.published_tabs || []);
   const filteredPages: Record<string, string> = {};
   for (const tab of publishedTabSet) {
-    if ((data.published_pages as Record<string, string>)?.[tab]) {
-      filteredPages[tab] = (data.published_pages as Record<string, string>)[tab];
+    if (data.published_pages?.[tab]) {
+      filteredPages[tab] = data.published_pages[tab];
     }
   }
 
@@ -604,14 +498,10 @@ export async function updatePublishSettings(
   projectId: string,
   updates: Partial<{ author_name: string; published_tabs: string[]; slug: string }>,
 ): Promise<WritingProject> {
-  const { data, error } = await getSupabase()
-    .from('projects')
-    .update(updates)
-    .eq('id', projectId)
-    .select('*')
-    .single<WritingProjectRow>();
-
-  if (error) throw error;
+  const row = await apiFetch<WritingProjectRow>(`/api/projects/${encodeURIComponent(projectId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
   invalidateProject(projectId);
-  return toWritingProject(data);
+  return toWritingProject(row);
 }

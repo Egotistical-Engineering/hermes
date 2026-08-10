@@ -5,7 +5,7 @@ import * as Sentry from '@sentry/react'
 import posthog from 'posthog-js'
 import './index.css'
 import App from './App.jsx'
-import './lib/supabase'
+import './lib/api'
 import AuthProvider from './contexts/AuthContext'
 
 Sentry.init({

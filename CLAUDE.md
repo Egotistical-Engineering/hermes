@@ -1,6 +1,6 @@
 # Hermes
 
-An AI-guided writing tool that structures your thinking without doing the writing for you. Built on the Dignified Technology design philosophy. React 19, Supabase, Express 5, Anthropic Claude.
+An AI-guided writing tool that structures your thinking without doing the writing for you. Built on the Dignified Technology design philosophy. React 19, Express 5, Neon Postgres, Better Auth, Anthropic Claude.
 
 ## Open Source — Security Rules
 
@@ -27,8 +27,11 @@ npm run server:dev   # Backend only
 ## Architecture
 
 **Frontend**: React 19 + Vite 7 + react-router-dom + CSS Modules
-**Backend**: Express 5 + Anthropic Claude (`/server/src/`)
-**Database**: Supabase (PostgreSQL + Auth)
+**Backend**: Express 5 + Anthropic Claude (`/server/src/`) — owns ALL data access and auth
+**Database**: Neon Postgres (serverless, scale-to-zero)
+**Auth**: Better Auth (library, runs inside the Express server; bcrypt passwords, Google OAuth, bearer-token sessions)
+
+The frontend never talks to the database directly — every read/write goes through the Express API (`/api/projects`, `/api/read/:shortId`, `/api/auth/*`). There is no RLS; ownership checks are plain `where user_id = $sessionUser` in server code. See `server/MIGRATION.md` for the Supabase→Neon cutover runbook.
 
 ### Provider hierarchy
 

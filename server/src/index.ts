@@ -5,12 +5,14 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { toNodeHandler } from 'better-auth/node';
 import assistantRouter from './routes/assistant.js';
-import authRouter from './routes/auth.js';
+import projectsRouter from './routes/projects.js';
 import mcpRouter from './routes/mcp.js';
+import { auth } from './lib/auth.js';
 import logger from './lib/logger.js';
 import { mcpManager } from './lib/mcp.js';
-import { getUserFromBearerToken } from './middleware/auth.js';
+import { getOptionalUser } from './middleware/auth.js';
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
@@ -20,7 +22,7 @@ Sentry.init({
 });
 
 // Startup checks for required env vars
-const requiredEnv = ['ANTHROPIC_API_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_KEY', 'SUPABASE_ANON_KEY', 'FRONTEND_URL'];
+const requiredEnv = ['ANTHROPIC_API_KEY', 'DATABASE_URL', 'BETTER_AUTH_SECRET', 'FRONTEND_URL'];
 for (const key of requiredEnv) {
   if (!process.env[key]) {
     logger.error({ key }, 'Missing required environment variable');
@@ -48,7 +50,10 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json({ limit: '1mb' }));
+// Better Auth owns /api/auth/* and parses its own request bodies — mount before express.json()
+app.all('/api/auth/*splat', toNodeHandler(auth));
+
+app.use(express.json({ limit: '2mb' }));
 
 // Health check — before rate limiter so monitoring doesn't count
 app.get('/health', (_req, res) => {
@@ -70,17 +75,14 @@ const assistantLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: async (req) => {
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
-      const user = await getUserFromBearerToken(authHeader.slice(7));
-      if (user) return `user:${user.id}`;
-    }
+    const user = await getOptionalUser(req);
+    if (user) return `user:${user.id}`;
     return req.ip || 'unknown';
   },
 });
 
-app.use('/api/auth', rateLimit({ windowMs: 60_000, max: 10, standardHeaders: true, legacyHeaders: false }), authRouter);
 app.use('/api/assistant', assistantLimiter, assistantRouter);
+app.use('/api', rateLimit({ windowMs: 60_000, max: 120, standardHeaders: true, legacyHeaders: false }), projectsRouter);
 app.use('/api/mcp', rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false }), mcpRouter);
 
 // Sentry error handler (must be after all routes)
